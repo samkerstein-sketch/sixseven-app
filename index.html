@@ -87,13 +87,16 @@ body {
 .timer.warning { color: #F0997B; border-color: rgba(240,153,123,0.6); animation: pulse-warn 0.5s ease-in-out infinite; }
 @keyframes pulse-warn { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
 
-.close-btn {
+.close-btn, .mute-btn {
   width: 44px; height: 44px; border-radius: 50%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
   color: white; border: none; font-size: 22px; cursor: pointer;
   pointer-events: auto; display: flex; align-items: center;
   justify-content: center; font-weight: 300;
 }
+.mute-btn { font-size: 18px; }
+.mute-btn.muted { color: rgba(255,255,255,0.3); }
+.top-right-btns { display: flex; gap: 8px; }
 .center-display {
   flex: 1; display: flex; flex-direction: column;
   justify-content: center; align-items: center; pointer-events: none;
@@ -288,7 +291,10 @@ body {
     <div class="game-overlay">
       <div class="top-bar">
         <div class="timer" id="timer">0:30</div>
-        <button class="close-btn" onclick="endGame()">×</button>
+        <div class="top-right-btns">
+          <button class="mute-btn" id="mute-btn" onclick="toggleMute()">🔊</button>
+          <button class="close-btn" onclick="endGame()">×</button>
+        </div>
       </div>
       <div class="hand-status not-detected" id="hand-status">looking for you...</div>
       <div class="streak-badge" id="streak-badge">STREAK</div>
@@ -688,6 +694,200 @@ function drawFireAura(cx, cy) {
 }
 
 // ═══════════════════════════════════════
+//  AUDIO CONTROLLER (Web Audio API)
+// ═══════════════════════════════════════
+let audioCtx = null;
+let masterGain = null;
+let isMuted = false;
+let bgmNodes = null;    // { kick, hihat, sub, interval }
+let chargeOsc = null;   // rising pitch oscillator during armed state
+let chargeGain = null;
+
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 1;
+  masterGain.connect(audioCtx.destination);
+}
+
+function resumeAudio() {
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+// ── BGM: Procedural phonk/jersey club loop ──
+function startBGM() {
+  if (!audioCtx || bgmNodes) return;
+  const bpm = 140;
+  const stepTime = 60 / bpm / 4; // 16th note
+  let step = 0;
+
+  // Kick pattern: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,1] (4/4 with a ghost)
+  const kickPattern  = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,1];
+  // Hi-hat pattern: offbeats + rolls
+  const hihatPattern = [0,0,1,0, 0,0,1,0, 0,0,1,1, 0,0,1,0];
+  // Sub bass: follows kick with sustain
+  const subPattern   = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0];
+
+  const bgmGain = audioCtx.createGain();
+  bgmGain.gain.value = 0.25;
+  bgmGain.connect(masterGain);
+
+  function scheduleStep() {
+    const t = audioCtx.currentTime;
+    const idx = step % 16;
+
+    // Kick: short sine burst
+    if (kickPattern[idx]) {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(150, t);
+      osc.frequency.exponentialRampToValueAtTime(40, t + 0.08);
+      g.gain.setValueAtTime(0.9, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+      osc.connect(g); g.connect(bgmGain);
+      osc.start(t); osc.stop(t + 0.15);
+    }
+
+    // Hi-hat: filtered noise burst
+    if (hihatPattern[idx]) {
+      const bufSize = audioCtx.sampleRate * 0.04;
+      const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      const hp = audioCtx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 7000;
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.3, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+      src.connect(hp); hp.connect(g); g.connect(bgmGain);
+      src.start(t); src.stop(t + 0.05);
+    }
+
+    // Sub bass
+    if (subPattern[idx]) {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 55;
+      g.gain.setValueAtTime(0.6, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + stepTime * 2);
+      osc.connect(g); g.connect(bgmGain);
+      osc.start(t); osc.stop(t + stepTime * 2);
+    }
+
+    step++;
+  }
+
+  const interval = setInterval(scheduleStep, stepTime * 1000);
+  bgmNodes = { interval, gain: bgmGain };
+}
+
+function stopBGM() {
+  if (!bgmNodes) return;
+  clearInterval(bgmNodes.interval);
+  bgmNodes.gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+  setTimeout(() => { bgmNodes.gain.disconnect(); bgmNodes = null; }, 400);
+}
+
+// ── Snap SFX: punchy bass drop + noise burst ──
+function playSnapSFX() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const sfxGain = audioCtx.createGain();
+  sfxGain.gain.value = 0.7;
+  sfxGain.connect(masterGain);
+
+  // Deep bass hit
+  const bass = audioCtx.createOscillator();
+  const bassG = audioCtx.createGain();
+  bass.type = 'sine';
+  bass.frequency.setValueAtTime(200, t);
+  bass.frequency.exponentialRampToValueAtTime(30, t + 0.2);
+  bassG.gain.setValueAtTime(1, t);
+  bassG.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+  bass.connect(bassG); bassG.connect(sfxGain);
+  bass.start(t); bass.stop(t + 0.3);
+
+  // Noise burst (shatter texture)
+  const bufSize = audioCtx.sampleRate * 0.08;
+  const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+  const noise = audioCtx.createBufferSource();
+  noise.buffer = buf;
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = 2000; bp.Q.value = 1;
+  const noiseG = audioCtx.createGain();
+  noiseG.gain.setValueAtTime(0.5, t);
+  noiseG.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+  noise.connect(bp); bp.connect(noiseG); noiseG.connect(sfxGain);
+  noise.start(t); noise.stop(t + 0.1);
+
+  // Click transient
+  const click = audioCtx.createOscillator();
+  const clickG = audioCtx.createGain();
+  click.type = 'square';
+  click.frequency.value = 800;
+  clickG.gain.setValueAtTime(0.4, t);
+  clickG.gain.exponentialRampToValueAtTime(0.001, t + 0.02);
+  click.connect(clickG); clickG.connect(sfxGain);
+  click.start(t); click.stop(t + 0.03);
+
+  setTimeout(() => sfxGain.disconnect(), 500);
+}
+
+// ── Charge SFX: rising pitch during armed state ──
+function startChargeSFX() {
+  if (!audioCtx || chargeOsc) return;
+  const t = audioCtx.currentTime;
+  chargeGain = audioCtx.createGain();
+  chargeGain.gain.setValueAtTime(0, t);
+  chargeGain.gain.linearRampToValueAtTime(0.15, t + 0.3);
+  chargeGain.connect(masterGain);
+
+  chargeOsc = audioCtx.createOscillator();
+  chargeOsc.type = 'sawtooth';
+  chargeOsc.frequency.setValueAtTime(120, t);
+  chargeOsc.frequency.linearRampToValueAtTime(600, t + 3);
+
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(300, t);
+  lp.frequency.linearRampToValueAtTime(2000, t + 3);
+
+  chargeOsc.connect(lp);
+  lp.connect(chargeGain);
+  chargeOsc.start(t);
+  chargeOsc._filter = lp;
+}
+
+function stopChargeSFX() {
+  if (!chargeOsc) return;
+  const t = audioCtx.currentTime;
+  chargeGain.gain.linearRampToValueAtTime(0, t + 0.05);
+  chargeOsc.stop(t + 0.06);
+  setTimeout(() => {
+    try { chargeOsc._filter.disconnect(); } catch(e) {}
+    try { chargeGain.disconnect(); } catch(e) {}
+    chargeOsc = null; chargeGain = null;
+  }, 100);
+}
+
+// ── Mute toggle ──
+window.toggleMute = function() {
+  if (!audioCtx) return;
+  isMuted = !isMuted;
+  masterGain.gain.linearRampToValueAtTime(isMuted ? 0 : 1, audioCtx.currentTime + 0.05);
+  const btn = document.getElementById('mute-btn');
+  btn.textContent = isMuted ? '🔇' : '🔊';
+  btn.classList.toggle('muted', isMuted);
+}
+
+// ═══════════════════════════════════════
 //  PROMPT & UI HELPERS
 // ═══════════════════════════════════════
 function setPrompt(state) {
@@ -698,9 +898,11 @@ function setPrompt(state) {
     p.className = streak.fireMode ? 'prompt-box fire' : 'prompt-box armed';
     s.textContent = 'ARMED';
     s.className = 'hand-status armed';
+    startChargeSFX();
   } else {
     p.textContent = 'raise your hands up';
     p.className = streak.fireMode ? 'prompt-box fire' : 'prompt-box';
+    stopChargeSFX();
   }
 }
 
@@ -710,6 +912,8 @@ function setPrompt(state) {
 function triggerCount() {
   gameState.count++;
   registerCount();
+  stopChargeSFX();
+  playSnapSFX();
 
   const countEl = document.getElementById('count');
   countEl.textContent = gameState.count;
@@ -828,6 +1032,8 @@ window.startGame = async function() {
   gameState.startTime = Date.now(); lastDetectTime = -1;
   resetSM(); resetStreak(); particles = []; auraPhase = 0;
 
+  initAudio(); resumeAudio(); startBGM();
+
   document.getElementById('count').textContent = '0';
   document.getElementById('count').className = 'count-display';
   document.getElementById('timer').textContent = '0:30';
@@ -853,6 +1059,7 @@ window.endGame = function() {
   gameState.active = false;
   clearInterval(gameState.timer);
   stopCamera();
+  stopBGM(); stopChargeSFX();
 
   const count = gameState.count;
   const bestKey = 'sixseven_best';
