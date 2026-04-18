@@ -364,14 +364,14 @@ let gameState = {
 
 const ARM_CONFIRM  = 2;   // frames to confirm armed (flicker guard)
 const FIRE_CONFIRM = 1;   // only 1 frame for rapid release
-const MIN_CYCLE_MS = 80;  // fast cycles allowed
+const MIN_CYCLE_MS = 60;  // very fast cycles allowed
 
 // Thresholds as fractions of nose→shoulder distance
-const ARM_ZONE  = 0.15;   // wrists must be 15% of body-unit above forehead line
-const FIRE_ZONE = 0.10;   // wrists must be 10% of body-unit below fire line
+const ARM_ZONE  = -0.10;  // NEGATIVE = arm line is BELOW forehead (at ~eye level)
+const FIRE_ZONE = 0.05;   // tiny margin below fire line — small snap counts
 
 // Low-pass filter (smoothed wrist Y)
-const WRIST_SMOOTH = 0.45; // 0 = no smoothing, 1 = frozen
+const WRIST_SMOOTH = 0.30; // lighter smoothing for snappier response
 let smoothLWristY = null;
 let smoothRWristY = null;
 
@@ -380,6 +380,8 @@ function resetSM() {
   sm = { state:'idle', armFrames:0, fireFrames:0, lastCountTime:0, lostFrames:0 };
   smoothLWristY = null;
   smoothRWristY = null;
+  prevSmLWristY = null;
+  prevSmRWristY = null;
 }
 
 /**
@@ -395,6 +397,11 @@ function lowPass(prev, raw, alpha) {
  * Core 6-7 detection.
  * Uses dynamic body-proportional thresholds + smoothed wrists.
  */
+// Velocity tracking for rapid-release detection
+let prevSmLWristY = null;
+let prevSmRWristY = null;
+const VELOCITY_FIRE_THRESHOLD = 0.008; // min downward velocity to insta-fire
+
 function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
   // ── Dynamic reference points ──
   const shoulderY  = (lShoulder.y + rShoulder.y) / 2;
@@ -403,21 +410,30 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
   const bodyUnit   = shoulderY - noseY; // distance nose→shoulders (always positive)
   if (bodyUnit < 0.01) return false;    // face not properly visible
 
-  // Forehead line: midpoint between eyes and nose
+  // ARM line: at eye level (ARM_ZONE is negative, so this is BELOW forehead)
   const foreheadY = (eyeY + noseY) / 2;
-  // Fire line: midpoint between nose and shoulders
-  const fireLineY = (noseY + shoulderY) / 2;
+  const armThreshold  = foreheadY - bodyUnit * ARM_ZONE;
+
+  // FIRE line: just below nose (closer to nose than shoulders for snappier drop)
+  const fireLineY = noseY + bodyUnit * 0.3; // 30% down from nose toward shoulders
+  const fireThreshold = fireLineY + bodyUnit * FIRE_ZONE;
 
   // ── Smooth wrist Y coordinates ──
+  prevSmLWristY = smoothLWristY;
+  prevSmRWristY = smoothRWristY;
   smoothLWristY = lowPass(smoothLWristY, lWrist.y, WRIST_SMOOTH);
   smoothRWristY = lowPass(smoothRWristY, rWrist.y, WRIST_SMOOTH);
 
-  // ── Zone checks (using smoothed wrists) ──
-  const armThreshold  = foreheadY - bodyUnit * ARM_ZONE;
-  const fireThreshold = fireLineY + bodyUnit * FIRE_ZONE;
+  // ── Velocity (positive = moving DOWN in screen coords) ──
+  const velL = prevSmLWristY !== null ? smoothLWristY - prevSmLWristY : 0;
+  const velR = prevSmRWristY !== null ? smoothRWristY - prevSmRWristY : 0;
+  const avgVelocity = (velL + velR) / 2;
 
-  const bothAboveForehead = smoothLWristY < armThreshold && smoothRWristY < armThreshold;
-  const bothBelowFireLine = smoothLWristY > fireThreshold && smoothRWristY > fireThreshold;
+  // ── Zone checks ──
+  const bothAboveArm = smoothLWristY < armThreshold && smoothRWristY < armThreshold;
+  const bothBelowFire = smoothLWristY > fireThreshold && smoothRWristY > fireThreshold;
+  // Velocity-based: even if not past fire line, a fast downward snap counts
+  const rapidSnap = avgVelocity > VELOCITY_FIRE_THRESHOLD && !bothAboveArm;
 
   // Store for drawing
   sm._armLineY  = armThreshold;
@@ -427,7 +443,7 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
 
   switch (sm.state) {
     case 'idle':
-      if (bothAboveForehead) {
+      if (bothAboveArm) {
         sm.armFrames++;
         if (sm.armFrames >= ARM_CONFIRM) {
           sm.state = 'armed';
@@ -438,10 +454,10 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
       return false;
 
     case 'armed':
-      // Still above forehead? Keep armed, reset fire counter
-      if (bothAboveForehead) { sm.fireFrames = 0; return false; }
-      // Check for the DROP — rapid release
-      if (bothBelowFireLine) {
+      // Still in arm zone? Keep armed, reset fire counter
+      if (bothAboveArm) { sm.fireFrames = 0; return false; }
+      // Check for the DROP — position-based OR velocity-based
+      if (bothBelowFire || rapidSnap) {
         sm.fireFrames++;
         if (sm.fireFrames >= FIRE_CONFIRM && (now - sm.lastCountTime) >= MIN_CYCLE_MS) {
           sm.lastCountTime = now;
@@ -451,7 +467,7 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
           return true; // COUNT!
         }
       } else {
-        // Between forehead and fire line — still transitioning
+        // Between arm and fire line, not snapping fast — still transitioning
         sm.fireFrames = 0;
       }
       return false;
@@ -1357,8 +1373,8 @@ function drawPose(pose, nose, lSh, rSh, lWr, rWr) {
 
   // Labels
   ctx.font = '10px -apple-system, sans-serif';
-  ctx.fillStyle = 'rgba(175,169,236,0.6)'; ctx.fillText('READY', 6, armLinePixel - 4);
-  ctx.fillStyle = 'rgba(250,199,117,0.5)'; ctx.fillText('DROP', 6, fireLinePixel - 4);
+  ctx.fillStyle = 'rgba(175,169,236,0.6)'; ctx.fillText('RAISE', 6, armLinePixel - 4);
+  ctx.fillStyle = 'rgba(250,199,117,0.5)'; ctx.fillText('SNAP', 6, fireLinePixel - 4);
 
   // Arm lines
   ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 2;
