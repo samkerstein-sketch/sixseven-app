@@ -695,13 +695,22 @@ function drawFireAura(cx, cy) {
 
 // ═══════════════════════════════════════
 //  AUDIO CONTROLLER (Web Audio API)
+//  — Reactive engine: underwater filter,
+//    dynamic speed, combo milestones,
+//    seamless loop
 // ═══════════════════════════════════════
 let audioCtx = null;
 let masterGain = null;
 let isMuted = false;
-let bgmNodes = null;    // { kick, hihat, sub, interval }
-let chargeOsc = null;   // rising pitch oscillator during armed state
+let bgmNodes = null;
+let chargeOsc = null;
 let chargeGain = null;
+
+// Reactive audio state
+let bgmFilter = null;        // low-pass "underwater" filter on BGM
+let bgmSpeedRate = 1.0;      // current playback speed multiplier
+let lastCountTime_audio = 0;  // for 3s inactivity reset
+let bgmBaseStepMs = 0;        // base step interval at 1x speed
 
 function initAudio() {
   if (audioCtx) return;
@@ -715,42 +724,198 @@ function resumeAudio() {
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 }
 
-// ── BGM: Procedural phonk/jersey club loop ──
+// ── 1. UNDERWATER FILTER ──
+// Applied to BGM chain: armed = muffled (400 Hz), drop = full clarity (22 kHz)
+function setBGMFilter(muffled) {
+  if (!bgmFilter) return;
+  const t = audioCtx.currentTime;
+  bgmFilter.frequency.cancelScheduledValues(t);
+  if (muffled) {
+    // Underwater: ramp down to 400 Hz over 0.15s
+    bgmFilter.frequency.setValueAtTime(bgmFilter.frequency.value, t);
+    bgmFilter.frequency.linearRampToValueAtTime(400, t + 0.15);
+    bgmFilter.Q.setValueAtTime(bgmFilter.Q.value, t);
+    bgmFilter.Q.linearRampToValueAtTime(4, t + 0.15);
+  } else {
+    // Full clarity: snap open instantly
+    bgmFilter.frequency.setValueAtTime(22000, t);
+    bgmFilter.Q.setValueAtTime(0.5, t);
+  }
+}
+
+// ── 2. DYNAMIC SPEED ──
+// +5% every 5 counts, reset after 3s inactivity
+function updateBGMSpeed(count) {
+  if (!bgmNodes) return;
+  const speedBoosts = Math.floor(count / 5);
+  const newRate = 1.0 + speedBoosts * 0.05;
+  // Cap at 1.5x to keep it musical
+  bgmSpeedRate = Math.min(newRate, 1.5);
+  applyBGMSpeed();
+}
+
+function resetBGMSpeed() {
+  bgmSpeedRate = 1.0;
+  applyBGMSpeed();
+}
+
+function applyBGMSpeed() {
+  if (!bgmNodes) return;
+  // Adjust the interval timing for the sequencer
+  clearInterval(bgmNodes.interval);
+  const newStepMs = bgmBaseStepMs / bgmSpeedRate;
+  bgmNodes.interval = setInterval(bgmNodes.scheduleStep, newStepMs);
+  // Store the pitch multiplier for oscillator frequencies
+  bgmNodes.pitchMul = bgmSpeedRate;
+}
+
+// Check for 3s inactivity — called from detect loop
+function checkSpeedDecay() {
+  if (!bgmNodes || bgmSpeedRate <= 1.0) return;
+  if (performance.now() - lastCountTime_audio > 3000) {
+    resetBGMSpeed();
+  }
+}
+
+// ── 3. COMBO MILESTONE SFX ──
+function playMilestoneSFX(count) {
+  if (!audioCtx) return;
+  if (count % 10 === 0) {
+    playAirHorn();
+  } else if (count % 5 === 0) {
+    playLevelUpChime();
+  }
+}
+
+function playLevelUpChime() {
+  const t = audioCtx.currentTime;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.35, t);
+  g.gain.linearRampToValueAtTime(0, t + 0.6);
+  g.connect(masterGain);
+
+  // Ascending arpeggio: C5 → E5 → G5
+  const notes = [523, 659, 784];
+  notes.forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'triangle';
+    const noteG = audioCtx.createGain();
+    const start = t + i * 0.08;
+    osc.frequency.value = freq;
+    noteG.gain.setValueAtTime(0.5, start);
+    noteG.gain.exponentialRampToValueAtTime(0.001, start + 0.3);
+    osc.connect(noteG); noteG.connect(g);
+    osc.start(start); osc.stop(start + 0.35);
+  });
+
+  // Shimmer: high-frequency noise sparkle
+  const shimBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.15, audioCtx.sampleRate);
+  const shimData = shimBuf.getChannelData(0);
+  for (let i = 0; i < shimData.length; i++) shimData[i] = Math.random() * 2 - 1;
+  const shim = audioCtx.createBufferSource();
+  shim.buffer = shimBuf;
+  const shimHP = audioCtx.createBiquadFilter();
+  shimHP.type = 'highpass'; shimHP.frequency.value = 10000;
+  const shimG = audioCtx.createGain();
+  shimG.gain.setValueAtTime(0.15, t);
+  shimG.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+  shim.connect(shimHP); shimHP.connect(shimG); shimG.connect(g);
+  shim.start(t); shim.stop(t + 0.2);
+
+  setTimeout(() => g.disconnect(), 800);
+}
+
+function playAirHorn() {
+  const t = audioCtx.currentTime;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.45, t);
+  g.connect(masterGain);
+
+  // Classic air horn: stacked detuned sawtooths
+  const freqs = [520, 523, 526, 780, 783]; // slightly detuned cluster
+  freqs.forEach(freq => {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq * 0.7, t);
+    osc.frequency.linearRampToValueAtTime(freq, t + 0.05); // quick slide up
+    osc.frequency.setValueAtTime(freq, t + 0.5);
+    const oscG = audioCtx.createGain();
+    oscG.gain.setValueAtTime(0.2, t);
+    oscG.gain.setValueAtTime(0.2, t + 0.4);
+    oscG.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+    osc.connect(oscG); oscG.connect(g);
+    osc.start(t); osc.stop(t + 0.75);
+  });
+
+  // Distortion / saturation via waveshaper
+  const ws = audioCtx.createWaveShaper();
+  const curve = new Float32Array(256);
+  for (let i = 0; i < 256; i++) {
+    const x = (i / 128) - 1;
+    curve[i] = (Math.PI + 3) * x / (Math.PI + 3 * Math.abs(x));
+  }
+  ws.curve = curve;
+  ws.oversample = '2x';
+
+  // Re-route: disconnect g from master, insert waveshaper
+  g.disconnect();
+  g.connect(ws);
+  const wsGain = audioCtx.createGain();
+  wsGain.gain.setValueAtTime(0.5, t);
+  wsGain.gain.linearRampToValueAtTime(0, t + 0.75);
+  ws.connect(wsGain);
+  wsGain.connect(masterGain);
+
+  setTimeout(() => { wsGain.disconnect(); ws.disconnect(); }, 900);
+}
+
+// ── 4. SEAMLESS BGM LOOP (scheduler-based, gapless) ──
 function startBGM() {
   if (!audioCtx || bgmNodes) return;
   const bpm = 140;
-  const stepTime = 60 / bpm / 4; // 16th note
+  const stepTime = 60 / bpm / 4; // 16th note duration
+  bgmBaseStepMs = stepTime * 1000;
+  bgmSpeedRate = 1.0;
   let step = 0;
 
-  // Kick pattern: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,1] (4/4 with a ghost)
+  // Patterns (16 steps = 1 bar)
   const kickPattern  = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,1];
-  // Hi-hat pattern: offbeats + rolls
   const hihatPattern = [0,0,1,0, 0,0,1,0, 0,0,1,1, 0,0,1,0];
-  // Sub bass: follows kick with sustain
   const subPattern   = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0];
+  // 808 clap on beats 2 and 4
+  const clapPattern  = [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
 
+  // BGM gain → underwater filter → master
   const bgmGain = audioCtx.createGain();
   bgmGain.gain.value = 0.25;
-  bgmGain.connect(masterGain);
+  bgmFilter = audioCtx.createBiquadFilter();
+  bgmFilter.type = 'lowpass';
+  bgmFilter.frequency.value = 22000; // fully open
+  bgmFilter.Q.value = 0.5;
+  bgmGain.connect(bgmFilter);
+  bgmFilter.connect(masterGain);
+
+  let pitchMul = 1.0;
 
   function scheduleStep() {
     const t = audioCtx.currentTime;
     const idx = step % 16;
+    pitchMul = bgmSpeedRate;
 
-    // Kick: short sine burst
+    // Kick
     if (kickPattern[idx]) {
       const osc = audioCtx.createOscillator();
       const g = audioCtx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(150, t);
-      osc.frequency.exponentialRampToValueAtTime(40, t + 0.08);
+      osc.frequency.setValueAtTime(150 * pitchMul, t);
+      osc.frequency.exponentialRampToValueAtTime(40 * pitchMul, t + 0.08);
       g.gain.setValueAtTime(0.9, t);
       g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
       osc.connect(g); g.connect(bgmGain);
       osc.start(t); osc.stop(t + 0.15);
     }
 
-    // Hi-hat: filtered noise burst
+    // Hi-hat
     if (hihatPattern[idx]) {
       const bufSize = audioCtx.sampleRate * 0.04;
       const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
@@ -759,7 +924,7 @@ function startBGM() {
       const src = audioCtx.createBufferSource();
       src.buffer = buf;
       const hp = audioCtx.createBiquadFilter();
-      hp.type = 'highpass'; hp.frequency.value = 7000;
+      hp.type = 'highpass'; hp.frequency.value = 7000 * pitchMul;
       const g = audioCtx.createGain();
       g.gain.setValueAtTime(0.3, t);
       g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
@@ -772,25 +937,46 @@ function startBGM() {
       const osc = audioCtx.createOscillator();
       const g = audioCtx.createGain();
       osc.type = 'sine';
-      osc.frequency.value = 55;
+      osc.frequency.value = 55 * pitchMul;
       g.gain.setValueAtTime(0.6, t);
       g.gain.exponentialRampToValueAtTime(0.001, t + stepTime * 2);
       osc.connect(g); g.connect(bgmGain);
       osc.start(t); osc.stop(t + stepTime * 2);
     }
 
+    // Clap (noise burst with bandpass)
+    if (clapPattern[idx]) {
+      const bufSize = audioCtx.sampleRate * 0.06;
+      const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      const bp = audioCtx.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = 1200 * pitchMul; bp.Q.value = 2;
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.35, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      src.connect(bp); bp.connect(g); g.connect(bgmGain);
+      src.start(t); src.stop(t + 0.07);
+    }
+
     step++;
   }
 
-  const interval = setInterval(scheduleStep, stepTime * 1000);
-  bgmNodes = { interval, gain: bgmGain };
+  const interval = setInterval(scheduleStep, bgmBaseStepMs);
+  bgmNodes = { interval, gain: bgmGain, scheduleStep, pitchMul: 1.0 };
 }
 
 function stopBGM() {
   if (!bgmNodes) return;
   clearInterval(bgmNodes.interval);
   bgmNodes.gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
-  setTimeout(() => { bgmNodes.gain.disconnect(); bgmNodes = null; }, 400);
+  setTimeout(() => {
+    try { bgmFilter.disconnect(); } catch(e) {}
+    try { bgmNodes.gain.disconnect(); } catch(e) {}
+    bgmNodes = null; bgmFilter = null;
+  }, 400);
 }
 
 // ── Snap SFX: punchy bass drop + noise burst ──
@@ -899,6 +1085,7 @@ function setPrompt(state) {
     s.textContent = 'ARMED';
     s.className = 'hand-status armed';
     startChargeSFX();
+    setBGMFilter(true); // underwater muffle
   } else {
     p.textContent = 'raise your hands up';
     p.className = streak.fireMode ? 'prompt-box fire' : 'prompt-box';
@@ -914,6 +1101,10 @@ function triggerCount() {
   registerCount();
   stopChargeSFX();
   playSnapSFX();
+  setBGMFilter(false);  // full clarity on drop
+  lastCountTime_audio = performance.now();
+  updateBGMSpeed(gameState.count);
+  playMilestoneSFX(gameState.count);
 
   const countEl = document.getElementById('count');
   countEl.textContent = gameState.count;
@@ -1033,6 +1224,7 @@ window.startGame = async function() {
   resetSM(); resetStreak(); particles = []; auraPhase = 0;
 
   initAudio(); resumeAudio(); startBGM();
+  bgmSpeedRate = 1.0; lastCountTime_audio = performance.now();
 
   document.getElementById('count').textContent = '0';
   document.getElementById('count').className = 'count-display';
@@ -1105,6 +1297,7 @@ function detectLoop() {
   }
   updateParticles();
   updateFireMode();
+  checkSpeedDecay();
   requestAnimationFrame(detectLoop);
 }
 
