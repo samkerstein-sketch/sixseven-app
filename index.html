@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>67 Counter — Prototype</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+@font-face {
+  font-family: 'System';
+  src: local('-apple-system'), local('BlinkMacSystemFont'), local('Segoe UI');
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0a0a1a;
+  color: white;
+  min-height: 100vh;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Screens */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+
+.screen.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* START SCREEN */
+#start-screen {
+  background: radial-gradient(ellipse at center, #3C3489 0%, #0a0a1a 70%);
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.logo {
+  font-size: clamp(80px, 25vw, 180px);
+  font-weight: 900;
+  letter-spacing: -8px;
+  line-height: 0.9;
+  text-shadow: 0 0 60px rgba(175, 169, 236, 0.5);
+  margin-bottom: 20px;
+  animation: glow 2s ease-in-out infinite;
+}
+
+.logo .six { color: #AFA9EC; }
+.logo .seven { color: #FAC775; }
+
+@keyframes glow {
+  0%, 100% { text-shadow: 0 0 60px rgba(175, 169, 236, 0.5); }
+  50% { text-shadow: 0 0 80px rgba(250, 199, 117, 0.7); }
+}
+
+.tagline {
+  font-size: 18px;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 50px;
+  max-width: 320px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #FAC775 0%, #F0997B 100%);
+  color: #26215C;
+  padding: 20px 60px;
+  border-radius: 40px;
+  font-size: 20px;
+  font-weight: 800;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 10px 40px rgba(250, 199, 117, 0.4);
+  letter-spacing: 1px;
+  transition: transform 0.1s, box-shadow 0.2s;
+}
+
+.btn-primary:active {
+  transform: scale(0.96);
+  box-shadow: 0 4px 20px rgba(250, 199, 117, 0.3);
+}
+
+.loading-status {
+  margin-top: 30px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  min-height: 18px;
+}
+
+.how-to {
+  margin-top: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: rgba(255,255,255,0.6);
+  font-size: 13px;
+}
+
+.how-to-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(175, 169, 236, 0.2);
+  color: #AFA9EC;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+/* GAME SCREEN */
+#game-screen {
+  background: #000;
+}
+
+#video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+#canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(-1);
+  pointer-events: none;
+}
+
+.game-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.timer {
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(10px);
+  padding: 10px 20px;
+  border-radius: 30px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #FAC775;
+  border: 2px solid rgba(250, 199, 117, 0.4);
+  pointer-events: auto;
+}
+
+.timer.warning {
+  color: #F0997B;
+  border-color: rgba(240, 153, 123, 0.6);
+  animation: pulse-warn 0.5s ease-in-out infinite;
+}
+
+@keyframes pulse-warn {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.close-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(10px);
+  color: white;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 300;
+}
+
+.center-display {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+}
+
+.count-display {
+  font-size: clamp(120px, 40vw, 260px);
+  font-weight: 900;
+  letter-spacing: -10px;
+  line-height: 1;
+  text-shadow: 0 0 80px rgba(175, 169, 236, 0.8), 0 0 160px rgba(250, 199, 117, 0.4);
+  transition: transform 0.15s;
+}
+
+.count-display.pulse {
+  animation: count-pulse 0.3s ease-out;
+}
+
+@keyframes count-pulse {
+  0% { transform: scale(1); color: white; }
+  40% { transform: scale(1.3); color: #FAC775; text-shadow: 0 0 120px #FAC775; }
+  100% { transform: scale(1); color: white; }
+}
+
+.count-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  margin-top: 10px;
+}
+
+.bottom-prompt {
+  text-align: center;
+  padding-bottom: 20px;
+}
+
+.prompt-box {
+  background: rgba(175, 169, 236, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(175, 169, 236, 0.4);
+  border-radius: 20px;
+  padding: 16px 24px;
+  display: inline-block;
+  font-size: 15px;
+  font-weight: 600;
+  color: #AFA9EC;
+}
+
+.hand-status {
+  position: absolute;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.hand-status.detected {
+  background: rgba(29, 158, 117, 0.3);
+  border-color: rgba(93, 202, 165, 0.6);
+  color: #5DCAA5;
+}
+
+.hand-status.not-detected {
+  color: rgba(255,255,255,0.5);
+}
+
+/* RESULTS SCREEN */
+#results-screen {
+  background: linear-gradient(180deg, #1a1a2e 0%, #0a0a1a 100%);
+  justify-content: center;
+  align-items: center;
+  padding: 40px 30px;
+}
+
+.results-card {
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 30px;
+  padding: 40px 30px;
+  text-align: center;
+  width: 100%;
+  max-width: 360px;
+}
+
+.results-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.final-count {
+  font-size: clamp(80px, 20vw, 120px);
+  font-weight: 900;
+  color: #FAC775;
+  letter-spacing: -4px;
+  line-height: 1;
+  margin-bottom: 10px;
+  text-shadow: 0 0 60px rgba(250, 199, 117, 0.5);
+}
+
+.final-count-label {
+  font-size: 18px;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 30px;
+  font-weight: 600;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  font-size: 15px;
+}
+
+.stat-row:last-of-type {
+  border-bottom: none;
+}
+
+.stat-label {
+  color: rgba(255,255,255,0.6);
+}
+
+.stat-value {
+  color: white;
+  font-weight: 700;
+}
+
+.best-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #FAC775, #F0997B);
+  color: #26215C;
+  padding: 6px 14px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-top: 15px;
+  text-transform: uppercase;
+}
+
+.results-buttons {
+  margin-top: 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.btn-secondary {
+  background: rgba(175, 169, 236, 0.2);
+  color: #AFA9EC;
+  padding: 16px;
+  border-radius: 30px;
+  font-size: 16px;
+  font-weight: 700;
+  border: 1px solid rgba(175, 169, 236, 0.3);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.btn-secondary:active {
+  transform: scale(0.97);
+}
+
+/* Loader */
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: #AFA9EC;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Floating particles on count */
+.particle {
+  position: absolute;
+  pointer-events: none;
+  font-weight: 900;
+  font-size: 40px;
+  animation: float-up 1s ease-out forwards;
+  z-index: 5;
+}
+
+@keyframes float-up {
+  0% { opacity: 1; transform: translateY(0) scale(0.5); }
+  100% { opacity: 0; transform: translateY(-200px) scale(1.5); }
+}
+
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- START SCREEN -->
+  <div id="start-screen" class="screen active">
+    <div class="logo">
+      <span class="six">6</span><span class="seven">7</span>
+    </div>
+    <div class="tagline">67 COUNTER</div>
+    <div class="subtitle">do the 6-7 gesture — see how many you can do in 30 seconds</div>
+    <button class="btn-primary" id="start-btn" onclick="startGame()">START</button>
+    <div class="loading-status" id="status"></div>
+    <div class="how-to">
+      <div class="how-to-row">
+        <div class="step-num">1</div>
+        <span>allow camera access</span>
+      </div>
+      <div class="how-to-row">
+        <div class="step-num">2</div>
+        <span>hold both hands palms up</span>
+      </div>
+      <div class="how-to-row">
+        <div class="step-num">3</div>
+        <span>move hands up and down</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div id="game-screen" class="screen">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div class="game-overlay">
+      <div class="top-bar">
+        <div class="timer" id="timer">0:30</div>
+        <button class="close-btn" onclick="endGame()">×</button>
+      </div>
+      <div class="hand-status not-detected" id="hand-status">looking for hands...</div>
+      <div class="center-display">
+        <div class="count-display" id="count">0</div>
+        <div class="count-label">6 · 7</div>
+      </div>
+      <div class="bottom-prompt">
+        <div class="prompt-box" id="prompt">move your hands up and down</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULTS SCREEN -->
+  <div id="results-screen" class="screen">
+    <div class="results-card">
+      <div class="results-label">YOUR SCORE</div>
+      <div class="final-count" id="final-count">0</div>
+      <div class="final-count-label">6-7s in 30 seconds</div>
+      <div class="stat-row">
+        <span class="stat-label">per second</span>
+        <span class="stat-value" id="per-sec">0.0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">personal best</span>
+        <span class="stat-value" id="best">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">rank</span>
+        <span class="stat-value" id="rank">rookie</span>
+      </div>
+      <div id="new-best" style="display:none;" class="best-badge">★ NEW BEST</div>
+    </div>
+    <div class="results-buttons">
+      <button class="btn-primary" onclick="startGame()">PLAY AGAIN</button>
+      <button class="btn-secondary" onclick="showScreen('start-screen')">BACK HOME</button>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+import { HandLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
+
+let handLandmarker = null;
+let video = document.getElementById('video');
+let canvas = document.getElementById('canvas');
+let ctx = canvas.getContext('2d');
+
+let gameState = {
+  active: false,
+  count: 0,
+  timeLeft: 30,
+  startTime: 0,
+  timer: null,
+  stream: null,
+};
+
+let tracker = {
+  lastY: null,
+  direction: null,
+  peaks: 0,
+  troughs: 0,
+  lastCountTime: 0,
+  amplitude: 0,
+  extremeY: null,
+};
+
+const MIN_AMPLITUDE = 0.06;
+const MIN_CYCLE_MS = 200;
+
+async function loadModel() {
+  const status = document.getElementById('status');
+  status.innerHTML = '<span class="spinner"></span>loading ai model...';
+  try {
+    const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+    );
+    handLandmarker = await HandLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+        delegate: 'GPU'
+      },
+      runningMode: 'VIDEO',
+      numHands: 2,
+    });
+    status.innerHTML = 'ready to play';
+    setTimeout(() => { status.textContent = ''; }, 2000);
+  } catch (err) {
+    status.textContent = 'model failed to load. try refreshing.';
+    console.error(err);
+  }
+}
+
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    gameState.stream = stream;
+    return new Promise(resolve => {
+      video.onloadedmetadata = () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        resolve();
+      };
+    });
+  } catch (err) {
+    alert('camera permission is required to play');
+    throw err;
+  }
+}
+
+function stopCamera() {
+  if (gameState.stream) {
+    gameState.stream.getTracks().forEach(t => t.stop());
+    gameState.stream = null;
+  }
+}
+
+window.startGame = async function() {
+  if (!handLandmarker) {
+    await loadModel();
+    if (!handLandmarker) return;
+  }
+  showScreen('game-screen');
+  await startCamera();
+
+  gameState.active = true;
+  gameState.count = 0;
+  gameState.timeLeft = 30;
+  gameState.startTime = Date.now();
+  tracker = { lastY: null, direction: null, peaks: 0, troughs: 0, lastCountTime: 0, amplitude: 0, extremeY: null };
+
+  document.getElementById('count').textContent = '0';
+  document.getElementById('timer').textContent = '0:30';
+  document.getElementById('timer').classList.remove('warning');
+
+  gameState.timer = setInterval(() => {
+    gameState.timeLeft--;
+    const t = document.getElementById('timer');
+    t.textContent = `0:${String(gameState.timeLeft).padStart(2, '0')}`;
+    if (gameState.timeLeft <= 5) t.classList.add('warning');
+    if (gameState.timeLeft <= 0) endGame();
+  }, 1000);
+
+  requestAnimationFrame(detectLoop);
+}
+
+window.endGame = function() {
+  if (!gameState.active) return;
+  gameState.active = false;
+  clearInterval(gameState.timer);
+  stopCamera();
+
+  const count = gameState.count;
+  const bestKey = 'sixseven_best';
+  const prevBest = parseInt(localStorage.getItem(bestKey) || '0');
+  const isNewBest = count > prevBest;
+  if (isNewBest) localStorage.setItem(bestKey, count);
+
+  document.getElementById('final-count').textContent = count;
+  document.getElementById('per-sec').textContent = (count / 30).toFixed(1);
+  document.getElementById('best').textContent = isNewBest ? count : prevBest;
+  document.getElementById('new-best').style.display = isNewBest ? 'inline-block' : 'none';
+
+  let rank = 'rookie';
+  if (count >= 50) rank = 'legend';
+  else if (count >= 35) rank = 'pro';
+  else if (count >= 20) rank = 'solid';
+  else if (count >= 10) rank = 'warming up';
+  document.getElementById('rank').textContent = rank;
+
+  showScreen('results-screen');
+}
+
+window.showScreen = function(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function detectLoop() {
+  if (!gameState.active) return;
+  if (video.readyState === 4 && handLandmarker) {
+    const results = handLandmarker.detectForVideo(video, performance.now());
+    processResults(results);
+  }
+  requestAnimationFrame(detectLoop);
+}
+
+function processResults(results) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const status = document.getElementById('hand-status');
+
+  if (!results.landmarks || results.landmarks.length === 0) {
+    status.textContent = 'looking for hands...';
+    status.className = 'hand-status not-detected';
+    tracker.lastY = null;
+    return;
+  }
+
+  status.textContent = `${results.landmarks.length} hand${results.landmarks.length > 1 ? 's' : ''} detected`;
+  status.className = 'hand-status detected';
+
+  drawHands(results.landmarks);
+
+  let avgY = 0;
+  let palmsUp = 0;
+  for (const hand of results.landmarks) {
+    const wrist = hand[0];
+    const middleMCP = hand[9];
+    avgY += (wrist.y + middleMCP.y) / 2;
+    if (wrist.y > middleMCP.y) palmsUp++;
+  }
+  avgY /= results.landmarks.length;
+
+  if (palmsUp < results.landmarks.length * 0.5) {
+    return;
+  }
+
+  trackMotion(avgY);
+}
+
+function drawHands(landmarks) {
+  ctx.strokeStyle = '#FAC775';
+  ctx.fillStyle = '#AFA9EC';
+  ctx.lineWidth = 2;
+
+  const connections = [
+    [0,1],[1,2],[2,3],[3,4],
+    [0,5],[5,6],[6,7],[7,8],
+    [5,9],[9,10],[10,11],[11,12],
+    [9,13],[13,14],[14,15],[15,16],
+    [13,17],[17,18],[18,19],[19,20],
+    [0,17]
+  ];
+
+  for (const hand of landmarks) {
+    ctx.beginPath();
+    for (const [a, b] of connections) {
+      ctx.moveTo(hand[a].x * canvas.width, hand[a].y * canvas.height);
+      ctx.lineTo(hand[b].x * canvas.width, hand[b].y * canvas.height);
+    }
+    ctx.stroke();
+
+    for (const pt of hand) {
+      ctx.beginPath();
+      ctx.arc(pt.x * canvas.width, pt.y * canvas.height, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function trackMotion(y) {
+  if (tracker.lastY === null) {
+    tracker.lastY = y;
+    tracker.extremeY = y;
+    return;
+  }
+
+  const dy = y - tracker.lastY;
+  const newDirection = dy > 0.002 ? 'down' : dy < -0.002 ? 'up' : tracker.direction;
+
+  if (newDirection && newDirection !== tracker.direction) {
+    if (tracker.direction !== null) {
+      const amplitude = Math.abs(y - tracker.extremeY);
+      const now = performance.now();
+      const elapsed = now - tracker.lastCountTime;
+
+      if (amplitude >= MIN_AMPLITUDE && elapsed >= MIN_CYCLE_MS) {
+        if (tracker.direction === 'up' && newDirection === 'down') {
+          countUp();
+          tracker.lastCountTime = now;
+        }
+      }
+    }
+    tracker.extremeY = y;
+    tracker.direction = newDirection;
+  }
+
+  if ((tracker.direction === 'up' && y < tracker.extremeY) ||
+      (tracker.direction === 'down' && y > tracker.extremeY)) {
+    tracker.extremeY = y;
+  }
+
+  tracker.lastY = y;
+}
+
+function countUp() {
+  gameState.count++;
+  const countEl = document.getElementById('count');
+  countEl.textContent = gameState.count;
+  countEl.classList.remove('pulse');
+  void countEl.offsetWidth;
+  countEl.classList.add('pulse');
+  spawnParticle();
+}
+
+function spawnParticle() {
+  const p = document.createElement('div');
+  p.className = 'particle';
+  p.textContent = Math.random() > 0.5 ? '6' : '7';
+  p.style.color = Math.random() > 0.5 ? '#FAC775' : '#AFA9EC';
+  p.style.left = (30 + Math.random() * 40) + '%';
+  p.style.top = '50%';
+  document.querySelector('#game-screen').appendChild(p);
+  setTimeout(() => p.remove(), 1000);
+}
+
+window.addEventListener('load', () => {
+  loadModel();
+});
+
+</script>
+
+</body>
+</html>
