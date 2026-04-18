@@ -17,226 +17,111 @@ body {
   -webkit-user-select: none;
 }
 
-.app {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
+.app { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
 
 .screen {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.4s;
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  opacity: 0; pointer-events: none; transition: opacity 0.4s;
 }
+.screen.active { opacity: 1; pointer-events: auto; }
 
-.screen.active {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* START SCREEN */
+/* ── START ── */
 #start-screen {
   background: radial-gradient(ellipse at center, #3C3489 0%, #0a0a1a 70%);
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  padding: 40px 20px;
+  justify-content: center; align-items: center; text-align: center; padding: 40px 20px;
 }
 
 .logo {
-  font-size: clamp(80px, 25vw, 180px);
-  font-weight: 900;
-  letter-spacing: -8px;
-  line-height: 0.9;
-  text-shadow: 0 0 60px rgba(175, 169, 236, 0.5);
-  margin-bottom: 20px;
-  animation: glow 2s ease-in-out infinite;
+  font-size: clamp(80px, 25vw, 180px); font-weight: 900;
+  letter-spacing: -8px; line-height: 0.9;
+  text-shadow: 0 0 60px rgba(175,169,236,0.5);
+  margin-bottom: 20px; animation: glow 2s ease-in-out infinite;
 }
-
 .logo .six { color: #AFA9EC; }
 .logo .seven { color: #FAC775; }
 
 @keyframes glow {
-  0%, 100% { text-shadow: 0 0 60px rgba(175, 169, 236, 0.5); }
-  50% { text-shadow: 0 0 80px rgba(250, 199, 117, 0.7); }
+  0%, 100% { text-shadow: 0 0 60px rgba(175,169,236,0.5); }
+  50% { text-shadow: 0 0 80px rgba(250,199,117,0.7); }
 }
 
-.tagline {
-  font-size: 18px;
-  color: rgba(255,255,255,0.7);
-  margin-bottom: 12px;
-  font-weight: 500;
-}
-
-.subtitle {
-  font-size: 14px;
-  color: rgba(255,255,255,0.4);
-  margin-bottom: 50px;
-  max-width: 320px;
-}
+.tagline { font-size: 18px; color: rgba(255,255,255,0.7); margin-bottom: 12px; font-weight: 500; }
+.subtitle { font-size: 14px; color: rgba(255,255,255,0.4); margin-bottom: 50px; max-width: 320px; }
 
 .btn-primary {
   background: linear-gradient(135deg, #FAC775 0%, #F0997B 100%);
-  color: #26215C;
-  padding: 20px 60px;
-  border-radius: 40px;
-  font-size: 20px;
-  font-weight: 800;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 10px 40px rgba(250, 199, 117, 0.4);
-  letter-spacing: 1px;
-  transition: transform 0.1s, box-shadow 0.2s;
+  color: #26215C; padding: 20px 60px; border-radius: 40px;
+  font-size: 20px; font-weight: 800; border: none; cursor: pointer;
+  box-shadow: 0 10px 40px rgba(250,199,117,0.4);
+  letter-spacing: 1px; transition: transform 0.1s, box-shadow 0.2s;
 }
+.btn-primary:active { transform: scale(0.96); box-shadow: 0 4px 20px rgba(250,199,117,0.3); }
 
-.btn-primary:active {
-  transform: scale(0.96);
-  box-shadow: 0 4px 20px rgba(250, 199, 117, 0.3);
-}
+.loading-status { margin-top: 30px; font-size: 13px; color: rgba(255,255,255,0.5); min-height: 18px; }
 
-.loading-status {
-  margin-top: 30px;
-  font-size: 13px;
-  color: rgba(255,255,255,0.5);
-  min-height: 18px;
-}
-
-.how-to {
-  margin-top: 40px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  color: rgba(255,255,255,0.6);
-  font-size: 13px;
-}
-
-.how-to-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  justify-content: center;
-}
-
+.how-to { margin-top: 40px; display: flex; flex-direction: column; gap: 8px; color: rgba(255,255,255,0.6); font-size: 13px; }
+.how-to-row { display: flex; align-items: center; gap: 10px; justify-content: center; }
 .step-num {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: rgba(175, 169, 236, 0.2);
-  color: #AFA9EC;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 12px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(175,169,236,0.2); color: #AFA9EC;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 12px;
 }
 
-/* GAME SCREEN */
-#game-screen {
-  background: #000;
-}
+/* ── GAME ── */
+#game-screen { background: #000; }
 
 #video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: scaleX(-1);
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; transform: scaleX(-1);
 }
-
 #canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  transform: scaleX(-1);
-  pointer-events: none;
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  transform: scaleX(-1); pointer-events: none;
 }
 
 .game-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 20px;
-  pointer-events: none;
-  z-index: 10;
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  justify-content: space-between; padding: 20px; pointer-events: none; z-index: 10;
 }
 
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+.top-bar { display: flex; justify-content: space-between; align-items: center; }
 
 .timer {
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(10px);
-  padding: 10px 20px;
-  border-radius: 30px;
-  font-size: 20px;
-  font-weight: 800;
-  color: #FAC775;
-  border: 2px solid rgba(250, 199, 117, 0.4);
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+  padding: 10px 20px; border-radius: 30px; font-size: 20px;
+  font-weight: 800; color: #FAC775; border: 2px solid rgba(250,199,117,0.4);
   pointer-events: auto;
 }
-
 .timer.warning {
-  color: #F0997B;
-  border-color: rgba(240, 153, 123, 0.6);
+  color: #F0997B; border-color: rgba(240,153,123,0.6);
   animation: pulse-warn 0.5s ease-in-out infinite;
 }
-
 @keyframes pulse-warn {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.05); }
 }
 
 .close-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(10px);
-  color: white;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 300;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+  color: white; border: none; font-size: 22px; cursor: pointer;
+  pointer-events: auto; display: flex; align-items: center;
+  justify-content: center; font-weight: 300;
 }
 
 .center-display {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  pointer-events: none;
+  flex: 1; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; pointer-events: none;
 }
 
 .count-display {
-  font-size: clamp(120px, 40vw, 260px);
-  font-weight: 900;
-  letter-spacing: -10px;
-  line-height: 1;
-  text-shadow: 0 0 80px rgba(175, 169, 236, 0.8), 0 0 160px rgba(250, 199, 117, 0.4);
+  font-size: clamp(120px, 40vw, 260px); font-weight: 900;
+  letter-spacing: -10px; line-height: 1;
+  text-shadow: 0 0 80px rgba(175,169,236,0.8), 0 0 160px rgba(250,199,117,0.4);
   transition: transform 0.15s;
 }
-
-.count-display.pulse {
-  animation: count-pulse 0.3s ease-out;
-}
+.count-display.pulse { animation: count-pulse 0.3s ease-out; }
 
 @keyframes count-pulse {
   0% { transform: scale(1); color: white; }
@@ -245,237 +130,106 @@ body {
 }
 
 .count-label {
-  font-size: 16px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.6);
-  letter-spacing: 4px;
-  text-transform: uppercase;
-  margin-top: 10px;
+  font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.6);
+  letter-spacing: 4px; text-transform: uppercase; margin-top: 10px;
 }
 
-.bottom-prompt {
-  text-align: center;
-  padding-bottom: 20px;
-}
-
+.bottom-prompt { text-align: center; padding-bottom: 20px; }
 .prompt-box {
-  background: rgba(175, 169, 236, 0.15);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(175, 169, 236, 0.4);
-  border-radius: 20px;
-  padding: 16px 24px;
-  display: inline-block;
-  font-size: 15px;
-  font-weight: 600;
-  color: #AFA9EC;
-}
-
-.hand-status {
-  position: absolute;
-  top: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(10px);
+  background: rgba(175,169,236,0.15); backdrop-filter: blur(10px);
+  border: 1px solid rgba(175,169,236,0.4); border-radius: 20px;
+  padding: 16px 24px; display: inline-block; font-size: 15px;
+  font-weight: 600; color: #AFA9EC;
   transition: all 0.3s;
-  border: 1px solid rgba(255,255,255,0.2);
-  white-space: nowrap;
 }
-
-.hand-status.detected {
-  background: rgba(29, 158, 117, 0.3);
-  border-color: rgba(93, 202, 165, 0.6);
+.prompt-box.armed {
+  background: rgba(93,202,165,0.2);
+  border-color: rgba(93,202,165,0.6);
   color: #5DCAA5;
 }
 
-.hand-status.not-detected {
-  color: rgba(255,255,255,0.5);
+.hand-status {
+  position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+  padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+  transition: all 0.3s; border: 1px solid rgba(255,255,255,0.2); white-space: nowrap;
 }
-
-/* Motion indicator bar on the left side */
-.motion-bar {
-  position: absolute;
-  left: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 6px;
-  height: 40%;
-  border-radius: 3px;
-  background: rgba(255,255,255,0.1);
-  overflow: visible;
-  z-index: 20;
+.hand-status.detected {
+  background: rgba(29,158,117,0.3); border-color: rgba(93,202,165,0.6); color: #5DCAA5;
 }
-
-.motion-bar-fill {
-  position: absolute;
-  left: -2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #FAC775;
-  box-shadow: 0 0 12px #FAC775;
-  transition: top 0.08s linear;
+.hand-status.armed {
+  background: rgba(93,202,165,0.5); border-color: #5DCAA5; color: white;
 }
+.hand-status.not-detected { color: rgba(255,255,255,0.5); }
 
-.motion-bar-zone {
-  position: absolute;
-  left: -4px;
-  width: 14px;
-  height: 2px;
-  background: rgba(175, 169, 236, 0.6);
-  border-radius: 1px;
-}
-
-/* RESULTS SCREEN */
+/* ── RESULTS ── */
 #results-screen {
   background: linear-gradient(180deg, #1a1a2e 0%, #0a0a1a 100%);
-  justify-content: center;
-  align-items: center;
-  padding: 40px 30px;
+  justify-content: center; align-items: center; padding: 40px 30px;
 }
 
 .results-card {
-  background: rgba(255,255,255,0.05);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 30px;
-  padding: 40px 30px;
-  text-align: center;
-  width: 100%;
-  max-width: 360px;
+  background: rgba(255,255,255,0.05); backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 30px;
+  padding: 40px 30px; text-align: center; width: 100%; max-width: 360px;
 }
-
 .results-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.5);
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  margin-bottom: 12px;
+  font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.5);
+  letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px;
 }
-
 .final-count {
-  font-size: clamp(80px, 20vw, 120px);
-  font-weight: 900;
-  color: #FAC775;
-  letter-spacing: -4px;
-  line-height: 1;
-  margin-bottom: 10px;
-  text-shadow: 0 0 60px rgba(250, 199, 117, 0.5);
+  font-size: clamp(80px, 20vw, 120px); font-weight: 900; color: #FAC775;
+  letter-spacing: -4px; line-height: 1; margin-bottom: 10px;
+  text-shadow: 0 0 60px rgba(250,199,117,0.5);
 }
-
-.final-count-label {
-  font-size: 18px;
-  color: rgba(255,255,255,0.7);
-  margin-bottom: 30px;
-  font-weight: 600;
-}
+.final-count-label { font-size: 18px; color: rgba(255,255,255,0.7); margin-bottom: 30px; font-weight: 600; }
 
 .stat-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 14px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  font-size: 15px;
+  display: flex; justify-content: space-between; padding: 14px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 15px;
 }
-
-.stat-row:last-of-type {
-  border-bottom: none;
-}
-
-.stat-label {
-  color: rgba(255,255,255,0.6);
-}
-
-.stat-value {
-  color: white;
-  font-weight: 700;
-}
+.stat-row:last-of-type { border-bottom: none; }
+.stat-label { color: rgba(255,255,255,0.6); }
+.stat-value { color: white; font-weight: 700; }
 
 .best-badge {
-  display: inline-block;
-  background: linear-gradient(135deg, #FAC775, #F0997B);
-  color: #26215C;
-  padding: 6px 14px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  margin-top: 15px;
-  text-transform: uppercase;
+  display: inline-block; background: linear-gradient(135deg, #FAC775, #F0997B);
+  color: #26215C; padding: 6px 14px; border-radius: 12px;
+  font-size: 11px; font-weight: 800; letter-spacing: 1px; margin-top: 15px; text-transform: uppercase;
 }
 
-.results-buttons {
-  margin-top: 25px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-  max-width: 360px;
-}
-
+.results-buttons { margin-top: 25px; display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 360px; }
 .btn-secondary {
-  background: rgba(175, 169, 236, 0.2);
-  color: #AFA9EC;
-  padding: 16px;
-  border-radius: 30px;
-  font-size: 16px;
-  font-weight: 700;
-  border: 1px solid rgba(175, 169, 236, 0.3);
-  cursor: pointer;
-  transition: transform 0.1s;
+  background: rgba(175,169,236,0.2); color: #AFA9EC; padding: 16px;
+  border-radius: 30px; font-size: 16px; font-weight: 700;
+  border: 1px solid rgba(175,169,236,0.3); cursor: pointer; transition: transform 0.1s;
 }
-
-.btn-secondary:active {
-  transform: scale(0.97);
-}
+.btn-secondary:active { transform: scale(0.97); }
 
 .spinner {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(255,255,255,0.2);
-  border-top-color: #AFA9EC;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-right: 8px;
-  vertical-align: middle;
+  display: inline-block; width: 18px; height: 18px;
+  border: 2px solid rgba(255,255,255,0.2); border-top-color: #AFA9EC;
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+  margin-right: 8px; vertical-align: middle;
 }
-
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .particle {
-  position: absolute;
-  pointer-events: none;
-  font-weight: 900;
-  font-size: 40px;
-  animation: float-up 1s ease-out forwards;
-  z-index: 5;
+  position: absolute; pointer-events: none; font-weight: 900;
+  font-size: 40px; animation: float-up 1s ease-out forwards; z-index: 5;
 }
-
 @keyframes float-up {
   0% { opacity: 1; transform: translateY(0) scale(0.5); }
   100% { opacity: 0; transform: translateY(-200px) scale(1.5); }
 }
 
-/* Flash overlay on count */
 .count-flash {
-  position: absolute;
-  inset: 0;
-  background: rgba(250, 199, 117, 0.08);
-  pointer-events: none;
-  z-index: 4;
-  opacity: 0;
-  transition: opacity 0.15s;
+  position: absolute; inset: 0;
+  background: rgba(250,199,117,0.12);
+  pointer-events: none; z-index: 4;
+  opacity: 0; transition: opacity 0.15s;
 }
-
-.count-flash.active {
-  opacity: 1;
-}
+.count-flash.active { opacity: 1; }
 
 </style>
 </head>
@@ -483,32 +237,19 @@ body {
 
 <div class="app">
 
-  <!-- START SCREEN -->
   <div id="start-screen" class="screen active">
-    <div class="logo">
-      <span class="six">6</span><span class="seven">7</span>
-    </div>
+    <div class="logo"><span class="six">6</span><span class="seven">7</span></div>
     <div class="tagline">67 COUNTER</div>
-    <div class="subtitle">do the 6-7 gesture — see how many you can do in 30 seconds</div>
+    <div class="subtitle">raise both hands above your head, then drop them — count your reps in 30 seconds</div>
     <button class="btn-primary" id="start-btn" onclick="startGame()">START</button>
     <div class="loading-status" id="status"></div>
     <div class="how-to">
-      <div class="how-to-row">
-        <div class="step-num">1</div>
-        <span>allow camera access</span>
-      </div>
-      <div class="how-to-row">
-        <div class="step-num">2</div>
-        <span>show your hands to the camera</span>
-      </div>
-      <div class="how-to-row">
-        <div class="step-num">3</div>
-        <span>move hands up and down</span>
-      </div>
+      <div class="how-to-row"><div class="step-num">1</div><span>allow camera — stand so your upper body is visible</span></div>
+      <div class="how-to-row"><div class="step-num">2</div><span>raise both hands above your head</span></div>
+      <div class="how-to-row"><div class="step-num">3</div><span>drop them down — that's one rep!</span></div>
     </div>
   </div>
 
-  <!-- GAME SCREEN -->
   <div id="game-screen" class="screen">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
@@ -518,40 +259,25 @@ body {
         <div class="timer" id="timer">0:30</div>
         <button class="close-btn" onclick="endGame()">×</button>
       </div>
-      <div class="hand-status not-detected" id="hand-status">looking for hands...</div>
+      <div class="hand-status not-detected" id="hand-status">looking for you...</div>
       <div class="center-display">
         <div class="count-display" id="count">0</div>
         <div class="count-label">6 · 7</div>
       </div>
       <div class="bottom-prompt">
-        <div class="prompt-box" id="prompt">show hands & move up/down</div>
+        <div class="prompt-box" id="prompt">raise both hands above your head</div>
       </div>
-    </div>
-    <!-- Motion indicator -->
-    <div class="motion-bar" id="motion-bar">
-      <div class="motion-bar-zone" id="bar-baseline" style="top:50%"></div>
-      <div class="motion-bar-fill" id="bar-dot" style="top:50%"></div>
     </div>
   </div>
 
-  <!-- RESULTS SCREEN -->
   <div id="results-screen" class="screen">
     <div class="results-card">
       <div class="results-label">YOUR SCORE</div>
       <div class="final-count" id="final-count">0</div>
       <div class="final-count-label">6-7s in 30 seconds</div>
-      <div class="stat-row">
-        <span class="stat-label">per second</span>
-        <span class="stat-value" id="per-sec">0.0</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">personal best</span>
-        <span class="stat-value" id="best">0</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">rank</span>
-        <span class="stat-value" id="rank">rookie</span>
-      </div>
+      <div class="stat-row"><span class="stat-label">per second</span><span class="stat-value" id="per-sec">0.0</span></div>
+      <div class="stat-row"><span class="stat-label">personal best</span><span class="stat-value" id="best">0</span></div>
+      <div class="stat-row"><span class="stat-label">rank</span><span class="stat-value" id="rank">rookie</span></div>
       <div id="new-best" style="display:none;" class="best-badge">NEW BEST</div>
     </div>
     <div class="results-buttons">
@@ -563,185 +289,175 @@ body {
 </div>
 
 <script type="module">
-import { HandLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
+import { PoseLandmarker, FilesetResolver, DrawingUtils } from
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
 
-let handLandmarker = null;
-let video = document.getElementById('video');
+// ═══════════════════════════════════════════════
+//  POSE LANDMARKS (33 points — BlazePose model)
+//
+//  0  = nose
+//  2  = left eye inner   5 = right eye inner
+//  11 = left shoulder    12 = right shoulder
+//  15 = left wrist       16 = right wrist
+//  23 = left hip         24 = right hip
+// ═══════════════════════════════════════════════
+
+const L_SHOULDER = 11, R_SHOULDER = 12;
+const L_WRIST    = 15, R_WRIST    = 16;
+const NOSE       = 0;
+
+let poseLandmarker = null;
+let video  = document.getElementById('video');
 let canvas = document.getElementById('canvas');
-let ctx = canvas.getContext('2d');
+let ctx    = canvas.getContext('2d');
 
 let gameState = {
-  active: false,
-  count: 0,
-  timeLeft: 30,
-  startTime: 0,
-  timer: null,
-  stream: null,
+  active: false, count: 0, timeLeft: 30,
+  startTime: 0, timer: null, stream: null,
 };
 
-// ─── MOTION TRACKING ENGINE ───
-// Absolute threshold-based: calibrate resting position, then detect
-// when hands cross above the "up line" and return below the "down line".
+// ─────────────────────────────────────────────
+//  6-7 STATE MACHINE
 //
-// State machine:
-//   down → (hands cross UP line) → ready → (hands cross DOWN line) → COUNT + back to down
+//  State "idle"  : waiting for hands to go UP
+//  State "armed" : both wrists are ABOVE the head
+//                  (visual glow, no count yet)
+//  Transition armed → idle : both wrists drop
+//                  BELOW shoulder line → COUNT++
 //
-// "ready" = hands are raised. Staying up does NOT count.
-// Only the transition from ready → down triggers a count.
+//  Constraints:
+//   • Must see both wrists + both shoulders + nose
+//   • armed requires BOTH wrists above nose for
+//     ARM_CONFIRM consecutive frames (noise filter)
+//   • fired requires BOTH wrists below shoulder avg
+//     for FIRE_CONFIRM consecutive frames
+//   • MIN_CYCLE_MS debounce between counts
+// ─────────────────────────────────────────────
 
-const BUFFER_SIZE = 6;
-const CALIBRATION_FRAMES = 20;
-const UP_THRESHOLD = 0.04;   // hands must rise 4% of screen above baseline to become "ready"
-const DOWN_THRESHOLD = 0.02; // hands must return within 2% of baseline to count
-const MIN_CYCLE_MS = 150;
+const ARM_CONFIRM  = 2;   // frames wrists must stay above head to arm
+const FIRE_CONFIRM = 2;   // frames wrists must stay below shoulders to fire
+const MIN_CYCLE_MS = 120; // minimum ms between two counts
+const HEAD_MARGIN  = 0.02; // wrists must be this far above nose (2% screen)
+const SHOULDER_MARGIN = 0.02; // wrists must be this far below shoulders
 
-let motion = {
-  yBuffer: [],
-  state: 'down',       // down | ready
-  baselineY: null,      // resting Y position (calibrated from first frames)
-  calibrationSamples: [],
-  smoothY: 0,
-  frameCount: 0,
-  handsLostFrames: 0,
+let sm = {
+  state: 'idle',        // 'idle' | 'armed'
+  armFrames: 0,         // consecutive frames meeting arm condition
+  fireFrames: 0,        // consecutive frames meeting fire condition
   lastCountTime: 0,
+  lostFrames: 0,
 };
 
-function resetMotion() {
-  motion = {
-    yBuffer: [],
-    state: 'down',
-    baselineY: null,
-    calibrationSamples: [],
-    smoothY: 0,
-    frameCount: 0,
-    handsLostFrames: 0,
-    lastCountTime: 0,
-  };
+function resetSM() {
+  sm = { state: 'idle', armFrames: 0, fireFrames: 0, lastCountTime: 0, lostFrames: 0 };
 }
 
-function getBufferAvg() {
-  if (motion.yBuffer.length === 0) return null;
-  return motion.yBuffer.reduce((a, b) => a + b) / motion.yBuffer.length;
-}
+/**
+ * Core 6-7 logic. Receives the relevant pose landmarks for the current frame.
+ * Returns true if a count was triggered this frame.
+ */
+function processPose(nose, lShoulder, rShoulder, lWrist, rWrist) {
+  const shoulderY = (lShoulder.y + rShoulder.y) / 2;
+  const noseY     = nose.y;
 
-function trackMotion(rawY) {
-  // Ring buffer for smoothing
-  motion.yBuffer.push(rawY);
-  if (motion.yBuffer.length > BUFFER_SIZE) motion.yBuffer.shift();
-  if (motion.yBuffer.length < 2) return;
+  const bothAboveHead =
+    lWrist.y < noseY - HEAD_MARGIN &&
+    rWrist.y < noseY - HEAD_MARGIN;
 
-  const y = getBufferAvg();
-  motion.smoothY = y;
-  motion.frameCount++;
-
-  // ── Phase 1: Calibrate baseline from first N frames ──
-  if (motion.calibrationSamples.length < CALIBRATION_FRAMES) {
-    motion.calibrationSamples.push(y);
-    if (motion.calibrationSamples.length === CALIBRATION_FRAMES) {
-      motion.baselineY = motion.calibrationSamples.reduce((a, b) => a + b) / CALIBRATION_FRAMES;
-      console.log('Baseline calibrated:', motion.baselineY.toFixed(4));
-    }
-    return;
-  }
-
-  // Slowly adapt baseline when hands are in "down" state (resting)
-  if (motion.state === 'down') {
-    motion.baselineY = motion.baselineY * 0.99 + y * 0.01;
-  }
+  const bothBelowShoulders =
+    lWrist.y > shoulderY + SHOULDER_MARGIN &&
+    rWrist.y > shoulderY + SHOULDER_MARGIN;
 
   const now = performance.now();
-  const elapsed = now - motion.lastCountTime;
 
-  // In normalized coords: lower Y = hands higher on screen
-  // So "hands up" = y < baseline - UP_THRESHOLD
-  // "hands back down" = y > baseline - DOWN_THRESHOLD (close to or below baseline)
-
-  switch (motion.state) {
-    case 'down':
-      // Hands are resting. Check if they crossed UP above threshold.
-      if (y < motion.baselineY - UP_THRESHOLD) {
-        motion.state = 'ready';
-        // Update prompt to show we detected the raise
-        const p = document.getElementById('prompt');
-        if (p) p.textContent = 'now bring them down!';
+  switch (sm.state) {
+    case 'idle':
+      // Check if both wrists are above the head
+      if (bothAboveHead) {
+        sm.armFrames++;
+        if (sm.armFrames >= ARM_CONFIRM) {
+          sm.state = 'armed';
+          sm.fireFrames = 0;
+          updateUI('armed');
+        }
+      } else {
+        sm.armFrames = 0;
       }
-      break;
+      return false;
 
-    case 'ready':
-      // Hands are raised ("ready"). Wait for them to come back DOWN.
-      // Count ONLY when hands return near/below baseline.
-      if (y > motion.baselineY - DOWN_THRESHOLD && elapsed >= MIN_CYCLE_MS) {
-        countUp();
-        motion.lastCountTime = now;
-        motion.state = 'down';
-        const p = document.getElementById('prompt');
-        if (p) p.textContent = 'raise your hands!';
+    case 'armed':
+      // Still above head? Reset fire counter, keep armed
+      if (bothAboveHead) {
+        sm.fireFrames = 0;
+        return false;
       }
-      break;
+      // Check for the DROP: both wrists below shoulders
+      if (bothBelowShoulders) {
+        sm.fireFrames++;
+        if (sm.fireFrames >= FIRE_CONFIRM && (now - sm.lastCountTime) >= MIN_CYCLE_MS) {
+          // ══ FIRE — COUNT! ══
+          sm.lastCountTime = now;
+          sm.state = 'idle';
+          sm.armFrames = 0;
+          sm.fireFrames = 0;
+          updateUI('idle');
+          return true; // count triggered
+        }
+      } else {
+        // Wrists are between head and shoulders — still in transition, keep armed
+        sm.fireFrames = 0;
+      }
+      return false;
   }
-
-  // Update motion bar UI
-  updateMotionBar(y);
+  return false;
 }
 
-function updateMotionBar(y) {
-  const dot = document.getElementById('bar-dot');
-  const baseline = document.getElementById('bar-baseline');
-  if (!dot || !baseline) return;
-
-  // Map Y (0..1) to bar position (0%..100%)
-  // Clamp to reasonable range around the baseline
-  const range = 0.3;
-  const base = motion.baselineY || 0.5;
-  const normalized = ((y - base) / range + 0.5);
-  const pct = Math.max(0, Math.min(1, normalized)) * 100;
-  dot.style.top = pct + '%';
-
-  // Color the dot based on state: green = ready (hands up), gold = down (resting)
-  if (motion.state === 'ready') {
-    dot.style.background = '#5DCAA5';
-    dot.style.boxShadow = '0 0 12px #5DCAA5';
+function updateUI(state) {
+  const promptEl = document.getElementById('prompt');
+  const statusEl = document.getElementById('hand-status');
+  if (state === 'armed') {
+    promptEl.textContent = 'NOW DROP!';
+    promptEl.className = 'prompt-box armed';
+    statusEl.textContent = 'ARMED';
+    statusEl.className = 'hand-status armed';
   } else {
-    dot.style.background = '#FAC775';
-    dot.style.boxShadow = '0 0 12px #FAC775';
+    promptEl.textContent = 'raise both hands above your head';
+    promptEl.className = 'prompt-box';
   }
-
-  baseline.style.top = '50%';
 }
 
 // ─── MODEL LOADING ───
 async function loadModel() {
   const status = document.getElementById('status');
-  status.innerHTML = '<span class="spinner"></span>loading ai model...';
+  status.innerHTML = '<span class="spinner"></span>loading pose model...';
   try {
     const vision = await FilesetResolver.forVisionTasks(
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
     );
-    // Try GPU first, fallback to CPU for mobile compatibility
     for (const delegate of ['GPU', 'CPU']) {
       try {
-        handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
           baseOptions: {
-            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
             delegate
           },
           runningMode: 'VIDEO',
-          numHands: 2,
-          minHandDetectionConfidence: 0.5,
-          minHandPresenceConfidence: 0.5,
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.5,
+          minPosePresenceConfidence: 0.5,
           minTrackingConfidence: 0.5,
         });
-        console.log('Hand model loaded with:', delegate);
+        console.log('Pose model loaded with:', delegate);
         break;
       } catch (e) {
-        console.warn(delegate + ' failed:', e.message);
+        console.warn(delegate + ' delegate failed:', e.message);
         if (delegate === 'CPU') throw e;
       }
     }
     status.innerHTML = 'ready to play';
     setTimeout(() => { status.textContent = ''; }, 2000);
   } catch (err) {
-    status.textContent = 'model failed to load. try refreshing.';
+    status.textContent = 'model failed to load — try refreshing';
     console.error('Model load error:', err);
   }
 }
@@ -749,29 +465,18 @@ async function loadModel() {
 // ─── CAMERA ───
 async function startCamera() {
   try {
-    // Try multiple constraint sets for maximum mobile compatibility
-    const constraintOptions = [
-      { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 } },
-      { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
+    const options = [
+      { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 640 } },
+      { facingMode: 'user', width: { ideal: 360 }, height: { ideal: 480 } },
       { facingMode: 'user' },
-      true, // absolute fallback
+      true,
     ];
-
     let stream = null;
-    for (const constraints of constraintOptions) {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: constraints,
-          audio: false
-        });
-        break;
-      } catch (e) {
-        console.warn('Camera constraint failed:', constraints, e.message);
-      }
+    for (const c of options) {
+      try { stream = await navigator.mediaDevices.getUserMedia({ video: c, audio: false }); break; }
+      catch(e) { console.warn('cam fallback', e.message); }
     }
-
-    if (!stream) throw new Error('Could not access camera');
-
+    if (!stream) throw new Error('Cannot access camera');
     video.srcObject = stream;
     gameState.stream = stream;
 
@@ -780,22 +485,20 @@ async function startCamera() {
         video.play().then(() => {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
-          console.log('Camera ready:', video.videoWidth, 'x', video.videoHeight);
           resolve();
         }).catch(reject);
       };
       video.onerror = reject;
-      // Timeout fallback for mobile
       setTimeout(() => {
         if (video.readyState >= 2) {
-          canvas.width = video.videoWidth || 320;
-          canvas.height = video.videoHeight || 240;
+          canvas.width = video.videoWidth || 360;
+          canvas.height = video.videoHeight || 480;
           resolve();
         }
       }, 3000);
     });
   } catch (err) {
-    alert('Camera permission is required to play. Please allow camera access and try again.');
+    alert('Camera access is required. Please allow it and try again.');
     throw err;
   }
 }
@@ -812,11 +515,10 @@ function stopCamera() {
 let lastDetectTime = -1;
 
 window.startGame = async function() {
-  if (!handLandmarker) {
+  if (!poseLandmarker) {
     await loadModel();
-    if (!handLandmarker) return;
+    if (!poseLandmarker) return;
   }
-
   showScreen('game-screen');
   await startCamera();
 
@@ -825,12 +527,13 @@ window.startGame = async function() {
   gameState.timeLeft = 30;
   gameState.startTime = Date.now();
   lastDetectTime = -1;
-  resetMotion();
+  resetSM();
 
   document.getElementById('count').textContent = '0';
   document.getElementById('timer').textContent = '0:30';
   document.getElementById('timer').classList.remove('warning');
-  document.getElementById('prompt').textContent = 'show hands & move up/down';
+  document.getElementById('prompt').textContent = 'raise both hands above your head';
+  document.getElementById('prompt').className = 'prompt-box';
 
   gameState.timer = setInterval(() => {
     gameState.timeLeft--;
@@ -875,23 +578,19 @@ window.showScreen = function(id) {
   document.getElementById(id).classList.add('active');
 }
 
-// ─── DETECTION LOOP ───
+// ─── DETECT LOOP ───
 function detectLoop() {
   if (!gameState.active) return;
-
-  if (video.readyState >= 2 && handLandmarker) {
+  if (video.readyState >= 2 && poseLandmarker) {
     const now = performance.now();
-    if (now > lastDetectTime + 1) { // At least 1ms gap
+    if (now > lastDetectTime + 1) {
       lastDetectTime = now;
       try {
-        const results = handLandmarker.detectForVideo(video, Math.round(now));
+        const results = poseLandmarker.detectForVideo(video, Math.round(now));
         processResults(results);
-      } catch (e) {
-        // Silently skip bad frames
-      }
+      } catch(e) { /* skip bad frame */ }
     }
   }
-
   requestAnimationFrame(detectLoop);
 }
 
@@ -900,101 +599,134 @@ function processResults(results) {
   const statusEl = document.getElementById('hand-status');
   const promptEl = document.getElementById('prompt');
 
-  const hasHands = results.landmarks && results.landmarks.length > 0;
-
-  if (!hasHands) {
-    motion.handsLostFrames++;
-    if (motion.handsLostFrames > 15) {
-      statusEl.textContent = 'looking for hands...';
+  if (!results.landmarks || results.landmarks.length === 0) {
+    sm.lostFrames++;
+    if (sm.lostFrames > 15) {
+      statusEl.textContent = 'looking for you...';
       statusEl.className = 'hand-status not-detected';
-      promptEl.textContent = 'show your hands to the camera';
-      // Don't reset motion buffer immediately — hands might reappear
-      if (motion.handsLostFrames > 45) {
-        resetMotion();
+      if (sm.state !== 'idle') {
+        promptEl.textContent = 'step back so camera sees your upper body';
+        promptEl.className = 'prompt-box';
       }
+      if (sm.lostFrames > 60) resetSM();
     }
     return;
   }
 
-  motion.handsLostFrames = 0;
-  const numHands = results.landmarks.length;
-  statusEl.textContent = numHands + (numHands > 1 ? ' hands' : ' hand') + ' detected';
-  statusEl.className = 'hand-status detected';
+  sm.lostFrames = 0;
+  const pose = results.landmarks[0]; // first (only) person
 
-  if (motion.calibrationSamples.length < CALIBRATION_FRAMES) {
-    promptEl.textContent = 'hold still — calibrating...';
-  } else if (motion.frameCount <= CALIBRATION_FRAMES + 5) {
-    promptEl.textContent = 'raise your hands!';
+  // Check we have the landmarks we need with sufficient visibility
+  const nose      = pose[NOSE];
+  const lShoulder = pose[L_SHOULDER];
+  const rShoulder = pose[R_SHOULDER];
+  const lWrist    = pose[L_WRIST];
+  const rWrist    = pose[R_WRIST];
+
+  // Draw skeleton and zones
+  drawPose(pose, nose, lShoulder, rShoulder);
+
+  // Update status
+  if (sm.state !== 'armed') {
+    statusEl.textContent = 'tracking you';
+    statusEl.className = 'hand-status detected';
   }
 
-  drawHands(results.landmarks);
+  // ── Run state machine ──
+  const counted = processPose(nose, lShoulder, rShoulder, lWrist, rWrist);
 
-  // Compute average Y from wrist (0) landmarks — most stable point
-  let avgY = 0;
-  for (const hand of results.landmarks) {
-    avgY += hand[0].y; // wrist Y
+  if (counted) {
+    gameState.count++;
+    const countEl = document.getElementById('count');
+    countEl.textContent = gameState.count;
+    countEl.classList.remove('pulse');
+    void countEl.offsetWidth;
+    countEl.classList.add('pulse');
+
+    const flash = document.getElementById('count-flash');
+    flash.classList.add('active');
+    setTimeout(() => flash.classList.remove('active'), 150);
+
+    spawnParticle();
   }
-  avgY /= numHands;
-
-  trackMotion(avgY);
 }
 
 // ─── DRAWING ───
-const HAND_CONNECTIONS = [
-  [0,1],[1,2],[2,3],[3,4],
-  [0,5],[5,6],[6,7],[7,8],
-  [5,9],[9,10],[10,11],[11,12],
-  [9,13],[13,14],[14,15],[15,16],
-  [13,17],[17,18],[18,19],[19,20],
-  [0,17]
-];
-
-function drawHands(landmarks) {
+function drawPose(pose, nose, lShoulder, rShoulder) {
   const w = canvas.width;
   const h = canvas.height;
 
-  for (const hand of landmarks) {
-    // Draw connections
-    ctx.strokeStyle = 'rgba(250, 199, 117, 0.6)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (const [a, b] of HAND_CONNECTIONS) {
-      ctx.moveTo(hand[a].x * w, hand[a].y * h);
-      ctx.lineTo(hand[b].x * w, hand[b].y * h);
-    }
-    ctx.stroke();
+  // Draw threshold zones
+  const noseY = nose.y * h;
+  const shoulderY = ((lShoulder.y + rShoulder.y) / 2) * h;
 
-    // Draw wrist landmark bigger (it's what we track)
-    ctx.fillStyle = '#FAC775';
+  // Head line (ARM threshold)
+  ctx.strokeStyle = sm.state === 'armed' ? 'rgba(93,202,165,0.8)' : 'rgba(175,169,236,0.4)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 6]);
+  ctx.beginPath();
+  ctx.moveTo(0, noseY);
+  ctx.lineTo(w, noseY);
+  ctx.stroke();
+
+  // Shoulder line (FIRE threshold)
+  ctx.strokeStyle = 'rgba(250,199,117,0.4)';
+  ctx.beginPath();
+  ctx.moveTo(0, shoulderY);
+  ctx.lineTo(w, shoulderY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Zone labels (mirrored because canvas is flipped)
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.fillStyle = 'rgba(175,169,236,0.7)';
+  ctx.fillText('HEAD LINE', 8, noseY - 6);
+  ctx.fillStyle = 'rgba(250,199,117,0.7)';
+  ctx.fillText('SHOULDER LINE', 8, shoulderY - 6);
+
+  // Draw key landmarks
+  const lWrist = pose[L_WRIST];
+  const rWrist = pose[R_WRIST];
+
+  // Wrists — big circles, color-coded by state
+  const wristColor = sm.state === 'armed' ? '#5DCAA5' : '#FAC775';
+  const wristGlow  = sm.state === 'armed' ? 'rgba(93,202,165,0.6)' : 'rgba(250,199,117,0.4)';
+  for (const wrist of [lWrist, rWrist]) {
+    // Glow
     ctx.beginPath();
-    ctx.arc(hand[0].x * w, hand[0].y * h, 8, 0, Math.PI * 2);
+    ctx.arc(wrist.x * w, wrist.y * h, 18, 0, Math.PI * 2);
+    ctx.fillStyle = wristGlow;
     ctx.fill();
-
-    // Draw other landmarks smaller
-    ctx.fillStyle = 'rgba(175, 169, 236, 0.7)';
-    for (let i = 1; i < hand.length; i++) {
-      ctx.beginPath();
-      ctx.arc(hand[i].x * w, hand[i].y * h, 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // Solid
+    ctx.beginPath();
+    ctx.arc(wrist.x * w, wrist.y * h, 10, 0, Math.PI * 2);
+    ctx.fillStyle = wristColor;
+    ctx.fill();
   }
-}
 
-// ─── COUNT ───
-function countUp() {
-  gameState.count++;
-  const countEl = document.getElementById('count');
-  countEl.textContent = gameState.count;
-  countEl.classList.remove('pulse');
-  void countEl.offsetWidth;
-  countEl.classList.add('pulse');
+  // Shoulders — smaller
+  for (const sh of [lShoulder, rShoulder]) {
+    ctx.beginPath();
+    ctx.arc(sh.x * w, sh.y * h, 6, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(250,199,117,0.6)';
+    ctx.fill();
+  }
 
-  // Flash effect
-  const flash = document.getElementById('count-flash');
-  flash.classList.add('active');
-  setTimeout(() => flash.classList.remove('active'), 150);
+  // Nose
+  ctx.beginPath();
+  ctx.arc(nose.x * w, nose.y * h, 5, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(175,169,236,0.8)';
+  ctx.fill();
 
-  spawnParticle();
+  // Arm lines (shoulder → wrist)
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(lShoulder.x * w, lShoulder.y * h);
+  ctx.lineTo(lWrist.x * w, lWrist.y * h);
+  ctx.moveTo(rShoulder.x * w, rShoulder.y * h);
+  ctx.lineTo(rWrist.x * w, rWrist.y * h);
+  ctx.stroke();
 }
 
 function spawnParticle() {
@@ -1009,11 +741,8 @@ function spawnParticle() {
 }
 
 // ─── INIT ───
-window.addEventListener('load', () => {
-  loadModel();
-});
+window.addEventListener('load', () => { loadModel(); });
 
 </script>
-
 </body>
 </html>
