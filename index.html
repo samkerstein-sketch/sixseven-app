@@ -9,12 +9,9 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #0a0a1a;
-  color: white;
-  min-height: 100vh;
-  overflow: hidden;
-  user-select: none;
-  -webkit-user-select: none;
+  background: #0a0a1a; color: white;
+  min-height: 100vh; overflow: hidden;
+  user-select: none; -webkit-user-select: none;
 }
 
 .app { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
@@ -30,7 +27,6 @@ body {
   background: radial-gradient(ellipse at center, #3C3489 0%, #0a0a1a 70%);
   justify-content: center; align-items: center; text-align: center; padding: 40px 20px;
 }
-
 .logo {
   font-size: clamp(80px, 25vw, 180px); font-weight: 900;
   letter-spacing: -8px; line-height: 0.9;
@@ -39,15 +35,12 @@ body {
 }
 .logo .six { color: #AFA9EC; }
 .logo .seven { color: #FAC775; }
-
 @keyframes glow {
   0%, 100% { text-shadow: 0 0 60px rgba(175,169,236,0.5); }
   50% { text-shadow: 0 0 80px rgba(250,199,117,0.7); }
 }
-
 .tagline { font-size: 18px; color: rgba(255,255,255,0.7); margin-bottom: 12px; font-weight: 500; }
 .subtitle { font-size: 14px; color: rgba(255,255,255,0.4); margin-bottom: 50px; max-width: 320px; }
-
 .btn-primary {
   background: linear-gradient(135deg, #FAC775 0%, #F0997B 100%);
   color: #26215C; padding: 20px 60px; border-radius: 40px;
@@ -56,9 +49,7 @@ body {
   letter-spacing: 1px; transition: transform 0.1s, box-shadow 0.2s;
 }
 .btn-primary:active { transform: scale(0.96); box-shadow: 0 4px 20px rgba(250,199,117,0.3); }
-
 .loading-status { margin-top: 30px; font-size: 13px; color: rgba(255,255,255,0.5); min-height: 18px; }
-
 .how-to { margin-top: 40px; display: flex; flex-direction: column; gap: 8px; color: rgba(255,255,255,0.6); font-size: 13px; }
 .how-to-row { display: flex; align-items: center; gap: 10px; justify-content: center; }
 .step-num {
@@ -70,7 +61,6 @@ body {
 
 /* ── GAME ── */
 #game-screen { background: #000; }
-
 #video {
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: cover; transform: scaleX(-1);
@@ -79,28 +69,23 @@ body {
   position: absolute; inset: 0; width: 100%; height: 100%;
   transform: scaleX(-1); pointer-events: none;
 }
-
+#vfx-canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 5;
+}
 .game-overlay {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   justify-content: space-between; padding: 20px; pointer-events: none; z-index: 10;
 }
-
 .top-bar { display: flex; justify-content: space-between; align-items: center; }
-
 .timer {
   background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
   padding: 10px 20px; border-radius: 30px; font-size: 20px;
   font-weight: 800; color: #FAC775; border: 2px solid rgba(250,199,117,0.4);
-  pointer-events: auto;
+  pointer-events: auto; transition: all 0.3s;
 }
-.timer.warning {
-  color: #F0997B; border-color: rgba(240,153,123,0.6);
-  animation: pulse-warn 0.5s ease-in-out infinite;
-}
-@keyframes pulse-warn {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-}
+.timer.warning { color: #F0997B; border-color: rgba(240,153,123,0.6); animation: pulse-warn 0.5s ease-in-out infinite; }
+@keyframes pulse-warn { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
 
 .close-btn {
   width: 44px; height: 44px; border-radius: 50%;
@@ -109,29 +94,97 @@ body {
   pointer-events: auto; display: flex; align-items: center;
   justify-content: center; font-weight: 300;
 }
-
 .center-display {
   flex: 1; display: flex; flex-direction: column;
   justify-content: center; align-items: center; pointer-events: none;
 }
 
+/* ── COUNTER VFX ── */
 .count-display {
   font-size: clamp(120px, 40vw, 260px); font-weight: 900;
   letter-spacing: -10px; line-height: 1;
   text-shadow: 0 0 80px rgba(175,169,236,0.8), 0 0 160px rgba(250,199,117,0.4);
-  transition: transform 0.15s;
+  transition: transform 0.1s, filter 0.1s;
 }
-.count-display.pulse { animation: count-pulse 0.3s ease-out; }
-
-@keyframes count-pulse {
-  0% { transform: scale(1); color: white; }
-  40% { transform: scale(1.3); color: #FAC775; text-shadow: 0 0 120px #FAC775; }
-  100% { transform: scale(1); color: white; }
+.count-display.pop {
+  animation: neon-pop 0.4s ease-out;
+}
+.count-display.fire-pop {
+  animation: fire-pop 0.5s ease-out;
+}
+@keyframes neon-pop {
+  0% { transform: scale(1); filter: brightness(1); }
+  15% { transform: scale(1.5); filter: brightness(2.5); color: #FAC775;
+        text-shadow: 0 0 60px #FAC775, 0 0 120px #FAC775, 0 0 200px rgba(250,199,117,0.6); }
+  30% { transform: scale(1.1); filter: brightness(1.8); }
+  45% { transform: scale(1.35); filter: brightness(2.2); }
+  60% { transform: scale(1.05); filter: brightness(1.2); }
+  100% { transform: scale(1); filter: brightness(1); color: white;
+         text-shadow: 0 0 80px rgba(175,169,236,0.8), 0 0 160px rgba(250,199,117,0.4); }
+}
+@keyframes fire-pop {
+  0% { transform: scale(1); filter: brightness(1); }
+  10% { transform: scale(1.8); filter: brightness(3); color: #FF6B35;
+        text-shadow: 0 0 80px #FF6B35, 0 0 150px #FAC775, 0 0 250px rgba(255,107,53,0.8); }
+  25% { transform: scale(1.15); filter: brightness(2); }
+  40% { transform: scale(1.5); filter: brightness(2.5); color: #FAC775; }
+  60% { transform: scale(1.08); filter: brightness(1.4); }
+  100% { transform: scale(1); filter: brightness(1); }
 }
 
 .count-label {
   font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.6);
   letter-spacing: 4px; text-transform: uppercase; margin-top: 10px;
+  transition: all 0.3s;
+}
+
+/* ── STREAK BADGE ── */
+.streak-badge {
+  position: absolute; top: 120px; left: 50%; transform: translateX(-50%);
+  padding: 6px 18px; border-radius: 20px; font-size: 14px; font-weight: 800;
+  letter-spacing: 2px; text-transform: uppercase;
+  opacity: 0; transition: all 0.3s; z-index: 20;
+  pointer-events: none;
+}
+.streak-badge.visible {
+  opacity: 1; animation: streak-pulse 0.6s ease-in-out infinite;
+}
+.streak-badge.fire {
+  background: linear-gradient(135deg, #FF6B35, #FAC775, #FF6B35);
+  background-size: 200% 200%;
+  animation: streak-pulse 0.6s ease-in-out infinite, fire-gradient 1s linear infinite;
+  color: #1a0a00;
+  border: 2px solid #FF6B35;
+  box-shadow: 0 0 30px rgba(255,107,53,0.6), 0 0 60px rgba(250,199,117,0.3);
+}
+.streak-badge.hot {
+  background: rgba(250,199,117,0.3);
+  border: 1px solid rgba(250,199,117,0.6);
+  color: #FAC775;
+}
+@keyframes streak-pulse {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  50% { transform: translateX(-50%) scale(1.05); }
+}
+@keyframes fire-gradient {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* ── FIRE MODE OVERLAY ── */
+.fire-border {
+  position: absolute; inset: 0; pointer-events: none; z-index: 3;
+  border: 3px solid transparent; transition: all 0.4s;
+  border-radius: 0;
+}
+.fire-border.active {
+  border-color: #FF6B35;
+  box-shadow: inset 0 0 80px rgba(255,107,53,0.15), inset 0 0 200px rgba(250,199,117,0.08);
+  animation: fire-border-pulse 0.8s ease-in-out infinite;
+}
+@keyframes fire-border-pulse {
+  0%, 100% { border-color: #FF6B35; box-shadow: inset 0 0 80px rgba(255,107,53,0.15); }
+  50% { border-color: #FAC775; box-shadow: inset 0 0 120px rgba(250,199,117,0.2); }
 }
 
 .bottom-prompt { text-align: center; padding-bottom: 20px; }
@@ -139,13 +192,13 @@ body {
   background: rgba(175,169,236,0.15); backdrop-filter: blur(10px);
   border: 1px solid rgba(175,169,236,0.4); border-radius: 20px;
   padding: 16px 24px; display: inline-block; font-size: 15px;
-  font-weight: 600; color: #AFA9EC;
-  transition: all 0.3s;
+  font-weight: 600; color: #AFA9EC; transition: all 0.3s;
 }
 .prompt-box.armed {
-  background: rgba(93,202,165,0.2);
-  border-color: rgba(93,202,165,0.6);
-  color: #5DCAA5;
+  background: rgba(93,202,165,0.2); border-color: rgba(93,202,165,0.6); color: #5DCAA5;
+}
+.prompt-box.fire {
+  background: rgba(255,107,53,0.25); border-color: #FF6B35; color: #FF6B35;
 }
 
 .hand-status {
@@ -154,87 +207,64 @@ body {
   background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
   transition: all 0.3s; border: 1px solid rgba(255,255,255,0.2); white-space: nowrap;
 }
-.hand-status.detected {
-  background: rgba(29,158,117,0.3); border-color: rgba(93,202,165,0.6); color: #5DCAA5;
-}
-.hand-status.armed {
-  background: rgba(93,202,165,0.5); border-color: #5DCAA5; color: white;
-}
+.hand-status.detected { background: rgba(29,158,117,0.3); border-color: rgba(93,202,165,0.6); color: #5DCAA5; }
+.hand-status.armed { background: rgba(93,202,165,0.5); border-color: #5DCAA5; color: white; }
 .hand-status.not-detected { color: rgba(255,255,255,0.5); }
+
+/* ── SCREEN SHAKE ── */
+#game-screen.shake { animation: screen-shake 0.35s ease-out; }
+@keyframes screen-shake {
+  0% { transform: translate(0, 0) rotate(0); }
+  10% { transform: translate(-8px, 4px) rotate(-0.5deg); }
+  20% { transform: translate(6px, -6px) rotate(0.5deg); }
+  30% { transform: translate(-4px, 2px) rotate(-0.3deg); }
+  40% { transform: translate(4px, -2px) rotate(0.3deg); }
+  50% { transform: translate(-2px, 4px) rotate(-0.2deg); }
+  60% { transform: translate(2px, -2px) rotate(0.1deg); }
+  80% { transform: translate(-1px, 1px) rotate(0); }
+  100% { transform: translate(0, 0) rotate(0); }
+}
+#game-screen.big-shake { animation: big-shake 0.5s ease-out; }
+@keyframes big-shake {
+  0% { transform: translate(0,0) rotate(0); }
+  8% { transform: translate(-14px, 8px) rotate(-1deg); }
+  16% { transform: translate(12px, -10px) rotate(1deg); }
+  24% { transform: translate(-10px, 6px) rotate(-0.7deg); }
+  32% { transform: translate(8px, -4px) rotate(0.7deg); }
+  40% { transform: translate(-6px, 4px) rotate(-0.4deg); }
+  55% { transform: translate(4px, -2px) rotate(0.3deg); }
+  70% { transform: translate(-2px, 2px) rotate(-0.1deg); }
+  85% { transform: translate(1px, -1px) rotate(0); }
+  100% { transform: translate(0,0) rotate(0); }
+}
 
 /* ── RESULTS ── */
 #results-screen {
   background: linear-gradient(180deg, #1a1a2e 0%, #0a0a1a 100%);
   justify-content: center; align-items: center; padding: 40px 30px;
 }
-
 .results-card {
   background: rgba(255,255,255,0.05); backdrop-filter: blur(20px);
   border: 1px solid rgba(255,255,255,0.1); border-radius: 30px;
   padding: 40px 30px; text-align: center; width: 100%; max-width: 360px;
 }
-.results-label {
-  font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.5);
-  letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px;
-}
-.final-count {
-  font-size: clamp(80px, 20vw, 120px); font-weight: 900; color: #FAC775;
-  letter-spacing: -4px; line-height: 1; margin-bottom: 10px;
-  text-shadow: 0 0 60px rgba(250,199,117,0.5);
-}
+.results-label { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.5); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px; }
+.final-count { font-size: clamp(80px, 20vw, 120px); font-weight: 900; color: #FAC775; letter-spacing: -4px; line-height: 1; margin-bottom: 10px; text-shadow: 0 0 60px rgba(250,199,117,0.5); }
 .final-count-label { font-size: 18px; color: rgba(255,255,255,0.7); margin-bottom: 30px; font-weight: 600; }
-
-.stat-row {
-  display: flex; justify-content: space-between; padding: 14px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 15px;
-}
+.stat-row { display: flex; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 15px; }
 .stat-row:last-of-type { border-bottom: none; }
 .stat-label { color: rgba(255,255,255,0.6); }
 .stat-value { color: white; font-weight: 700; }
-
-.best-badge {
-  display: inline-block; background: linear-gradient(135deg, #FAC775, #F0997B);
-  color: #26215C; padding: 6px 14px; border-radius: 12px;
-  font-size: 11px; font-weight: 800; letter-spacing: 1px; margin-top: 15px; text-transform: uppercase;
-}
-
+.best-badge { display: inline-block; background: linear-gradient(135deg, #FAC775, #F0997B); color: #26215C; padding: 6px 14px; border-radius: 12px; font-size: 11px; font-weight: 800; letter-spacing: 1px; margin-top: 15px; text-transform: uppercase; }
 .results-buttons { margin-top: 25px; display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 360px; }
-.btn-secondary {
-  background: rgba(175,169,236,0.2); color: #AFA9EC; padding: 16px;
-  border-radius: 30px; font-size: 16px; font-weight: 700;
-  border: 1px solid rgba(175,169,236,0.3); cursor: pointer; transition: transform 0.1s;
-}
+.btn-secondary { background: rgba(175,169,236,0.2); color: #AFA9EC; padding: 16px; border-radius: 30px; font-size: 16px; font-weight: 700; border: 1px solid rgba(175,169,236,0.3); cursor: pointer; transition: transform 0.1s; }
 .btn-secondary:active { transform: scale(0.97); }
-
-.spinner {
-  display: inline-block; width: 18px; height: 18px;
-  border: 2px solid rgba(255,255,255,0.2); border-top-color: #AFA9EC;
-  border-radius: 50%; animation: spin 0.8s linear infinite;
-  margin-right: 8px; vertical-align: middle;
-}
+.spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #AFA9EC; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-.particle {
-  position: absolute; pointer-events: none; font-weight: 900;
-  font-size: 40px; animation: float-up 1s ease-out forwards; z-index: 5;
-}
-@keyframes float-up {
-  0% { opacity: 1; transform: translateY(0) scale(0.5); }
-  100% { opacity: 0; transform: translateY(-200px) scale(1.5); }
-}
-
-.count-flash {
-  position: absolute; inset: 0;
-  background: rgba(250,199,117,0.12);
-  pointer-events: none; z-index: 4;
-  opacity: 0; transition: opacity 0.15s;
-}
-.count-flash.active { opacity: 1; }
 
 </style>
 </head>
 <body>
-
 <div class="app">
 
   <div id="start-screen" class="screen active">
@@ -253,16 +283,18 @@ body {
   <div id="game-screen" class="screen">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
-    <div class="count-flash" id="count-flash"></div>
+    <canvas id="vfx-canvas"></canvas>
+    <div class="fire-border" id="fire-border"></div>
     <div class="game-overlay">
       <div class="top-bar">
         <div class="timer" id="timer">0:30</div>
         <button class="close-btn" onclick="endGame()">×</button>
       </div>
       <div class="hand-status not-detected" id="hand-status">looking for you...</div>
+      <div class="streak-badge" id="streak-badge">STREAK</div>
       <div class="center-display">
         <div class="count-display" id="count">0</div>
-        <div class="count-label">6 · 7</div>
+        <div class="count-label" id="count-label">6 · 7</div>
       </div>
       <div class="bottom-prompt">
         <div class="prompt-box" id="prompt">raise both hands above your head</div>
@@ -276,6 +308,7 @@ body {
       <div class="final-count" id="final-count">0</div>
       <div class="final-count-label">6-7s in 30 seconds</div>
       <div class="stat-row"><span class="stat-label">per second</span><span class="stat-value" id="per-sec">0.0</span></div>
+      <div class="stat-row"><span class="stat-label">best streak</span><span class="stat-value" id="best-streak">0</span></div>
       <div class="stat-row"><span class="stat-label">personal best</span><span class="stat-value" id="best">0</span></div>
       <div class="stat-row"><span class="stat-label">rank</span><span class="stat-value" id="rank">rookie</span></div>
       <div id="new-best" style="display:none;" class="best-badge">NEW BEST</div>
@@ -289,144 +322,360 @@ body {
 </div>
 
 <script type="module">
-import { PoseLandmarker, FilesetResolver, DrawingUtils } from
+import { PoseLandmarker, FilesetResolver } from
   'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
 
-// ═══════════════════════════════════════════════
-//  POSE LANDMARKS (33 points — BlazePose model)
-//
-//  0  = nose
-//  2  = left eye inner   5 = right eye inner
-//  11 = left shoulder    12 = right shoulder
-//  15 = left wrist       16 = right wrist
-//  23 = left hip         24 = right hip
-// ═══════════════════════════════════════════════
-
 const L_SHOULDER = 11, R_SHOULDER = 12;
-const L_WRIST    = 15, R_WRIST    = 16;
-const NOSE       = 0;
+const L_WRIST = 15, R_WRIST = 16;
+const NOSE = 0;
 
 let poseLandmarker = null;
 let video  = document.getElementById('video');
 let canvas = document.getElementById('canvas');
 let ctx    = canvas.getContext('2d');
+let vfxCanvas = document.getElementById('vfx-canvas');
+let vfxCtx = vfxCanvas.getContext('2d');
 
 let gameState = {
   active: false, count: 0, timeLeft: 30,
   startTime: 0, timer: null, stream: null,
 };
 
-// ─────────────────────────────────────────────
-//  6-7 STATE MACHINE
-//
-//  State "idle"  : waiting for hands to go UP
-//  State "armed" : both wrists are ABOVE the head
-//                  (visual glow, no count yet)
-//  Transition armed → idle : both wrists drop
-//                  BELOW shoulder line → COUNT++
-//
-//  Constraints:
-//   • Must see both wrists + both shoulders + nose
-//   • armed requires BOTH wrists above nose for
-//     ARM_CONFIRM consecutive frames (noise filter)
-//   • fired requires BOTH wrists below shoulder avg
-//     for FIRE_CONFIRM consecutive frames
-//   • MIN_CYCLE_MS debounce between counts
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════
+//  STATE MACHINE
+// ═══════════════════════════════════════
+const ARM_CONFIRM = 2, FIRE_CONFIRM = 2;
+const MIN_CYCLE_MS = 120;
+const HEAD_MARGIN = 0.02, SHOULDER_MARGIN = 0.02;
 
-const ARM_CONFIRM  = 2;   // frames wrists must stay above head to arm
-const FIRE_CONFIRM = 2;   // frames wrists must stay below shoulders to fire
-const MIN_CYCLE_MS = 120; // minimum ms between two counts
-const HEAD_MARGIN  = 0.02; // wrists must be this far above nose (2% screen)
-const SHOULDER_MARGIN = 0.02; // wrists must be this far below shoulders
+let sm = { state:'idle', armFrames:0, fireFrames:0, lastCountTime:0, lostFrames:0 };
+function resetSM() { sm = { state:'idle', armFrames:0, fireFrames:0, lastCountTime:0, lostFrames:0 }; }
 
-let sm = {
-  state: 'idle',        // 'idle' | 'armed'
-  armFrames: 0,         // consecutive frames meeting arm condition
-  fireFrames: 0,        // consecutive frames meeting fire condition
-  lastCountTime: 0,
-  lostFrames: 0,
-};
-
-function resetSM() {
-  sm = { state: 'idle', armFrames: 0, fireFrames: 0, lastCountTime: 0, lostFrames: 0 };
-}
-
-/**
- * Core 6-7 logic. Receives the relevant pose landmarks for the current frame.
- * Returns true if a count was triggered this frame.
- */
 function processPose(nose, lShoulder, rShoulder, lWrist, rWrist) {
   const shoulderY = (lShoulder.y + rShoulder.y) / 2;
-  const noseY     = nose.y;
-
-  const bothAboveHead =
-    lWrist.y < noseY - HEAD_MARGIN &&
-    rWrist.y < noseY - HEAD_MARGIN;
-
-  const bothBelowShoulders =
-    lWrist.y > shoulderY + SHOULDER_MARGIN &&
-    rWrist.y > shoulderY + SHOULDER_MARGIN;
-
+  const noseY = nose.y;
+  const bothAboveHead = lWrist.y < noseY - HEAD_MARGIN && rWrist.y < noseY - HEAD_MARGIN;
+  const bothBelowShoulders = lWrist.y > shoulderY + SHOULDER_MARGIN && rWrist.y > shoulderY + SHOULDER_MARGIN;
   const now = performance.now();
 
   switch (sm.state) {
     case 'idle':
-      // Check if both wrists are above the head
       if (bothAboveHead) {
         sm.armFrames++;
         if (sm.armFrames >= ARM_CONFIRM) {
           sm.state = 'armed';
           sm.fireFrames = 0;
-          updateUI('armed');
+          setPrompt('armed');
         }
-      } else {
-        sm.armFrames = 0;
-      }
+      } else { sm.armFrames = 0; }
       return false;
-
     case 'armed':
-      // Still above head? Reset fire counter, keep armed
-      if (bothAboveHead) {
-        sm.fireFrames = 0;
-        return false;
-      }
-      // Check for the DROP: both wrists below shoulders
+      if (bothAboveHead) { sm.fireFrames = 0; return false; }
       if (bothBelowShoulders) {
         sm.fireFrames++;
         if (sm.fireFrames >= FIRE_CONFIRM && (now - sm.lastCountTime) >= MIN_CYCLE_MS) {
-          // ══ FIRE — COUNT! ══
           sm.lastCountTime = now;
           sm.state = 'idle';
           sm.armFrames = 0;
           sm.fireFrames = 0;
-          updateUI('idle');
-          return true; // count triggered
+          return true;
         }
-      } else {
-        // Wrists are between head and shoulders — still in transition, keep armed
-        sm.fireFrames = 0;
-      }
+      } else { sm.fireFrames = 0; }
       return false;
   }
   return false;
 }
 
-function updateUI(state) {
-  const promptEl = document.getElementById('prompt');
-  const statusEl = document.getElementById('hand-status');
-  if (state === 'armed') {
-    promptEl.textContent = 'NOW DROP!';
-    promptEl.className = 'prompt-box armed';
-    statusEl.textContent = 'ARMED';
-    statusEl.className = 'hand-status armed';
+// ═══════════════════════════════════════
+//  STREAK SYSTEM
+// ═══════════════════════════════════════
+const STREAK_WINDOW_MS = 4000; // 5 counts within 4s = fire mode
+const STREAK_THRESHOLD = 5;
+const FIRE_MODE_DURATION = 4000;
+
+let streak = {
+  timestamps: [],
+  current: 0,
+  best: 0,
+  fireMode: false,
+  fireModeEnd: 0,
+};
+
+function resetStreak() {
+  streak = { timestamps: [], current: 0, best: 0, fireMode: false, fireModeEnd: 0 };
+  document.getElementById('fire-border').classList.remove('active');
+  document.getElementById('streak-badge').className = 'streak-badge';
+}
+
+function registerCount() {
+  const now = performance.now();
+  streak.timestamps.push(now);
+  // Trim old timestamps
+  streak.timestamps = streak.timestamps.filter(t => now - t < STREAK_WINDOW_MS);
+  streak.current = streak.timestamps.length;
+  if (streak.current > streak.best) streak.best = streak.current;
+
+  const badge = document.getElementById('streak-badge');
+
+  if (streak.current >= STREAK_THRESHOLD) {
+    // FIRE MODE
+    streak.fireMode = true;
+    streak.fireModeEnd = now + FIRE_MODE_DURATION;
+    document.getElementById('fire-border').classList.add('active');
+    badge.textContent = 'FIRE MODE x' + streak.current;
+    badge.className = 'streak-badge visible fire';
+    document.getElementById('count-label').textContent = 'ON FIRE';
+    document.getElementById('count-label').style.color = '#FF6B35';
+  } else if (streak.current >= 3) {
+    badge.textContent = 'STREAK x' + streak.current;
+    badge.className = 'streak-badge visible hot';
   } else {
-    promptEl.textContent = 'raise both hands above your head';
-    promptEl.className = 'prompt-box';
+    badge.className = 'streak-badge';
   }
 }
 
-// ─── MODEL LOADING ───
+function updateFireMode() {
+  if (!streak.fireMode) return;
+  if (performance.now() > streak.fireModeEnd) {
+    streak.fireMode = false;
+    document.getElementById('fire-border').classList.remove('active');
+    document.getElementById('streak-badge').className = 'streak-badge';
+    document.getElementById('count-label').textContent = '6 · 7';
+    document.getElementById('count-label').style.color = '';
+  }
+}
+
+// ═══════════════════════════════════════
+//  VFX PARTICLE SYSTEM
+// ═══════════════════════════════════════
+let particles = [];
+
+class Particle {
+  constructor(x, y, type) {
+    this.x = x; this.y = y;
+    this.type = type; // 'confetti' | 'fire' | 'spark'
+    this.life = 1;
+    this.maxLife = 1;
+
+    if (type === 'confetti') {
+      this.vx = (Math.random() - 0.5) * 12;
+      this.vy = -(Math.random() * 8 + 4);
+      this.gravity = 0.25;
+      this.size = Math.random() * 8 + 4;
+      this.rotation = Math.random() * 360;
+      this.rotSpeed = (Math.random() - 0.5) * 15;
+      this.decay = 0.012 + Math.random() * 0.008;
+      const colors = ['#FAC775','#AFA9EC','#5DCAA5','#F0997B','#FF6B35','#fff'];
+      this.color = colors[Math.floor(Math.random() * colors.length)];
+    } else if (type === 'fire') {
+      this.vx = (Math.random() - 0.5) * 16;
+      this.vy = -(Math.random() * 12 + 6);
+      this.gravity = 0.3;
+      this.size = Math.random() * 10 + 6;
+      this.decay = 0.018 + Math.random() * 0.01;
+      this.rotation = 0;
+      this.rotSpeed = 0;
+    } else if (type === 'spark') {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 6 + 2;
+      this.vx = Math.cos(angle) * speed;
+      this.vy = Math.sin(angle) * speed;
+      this.gravity = 0;
+      this.size = Math.random() * 3 + 1;
+      this.decay = 0.03 + Math.random() * 0.02;
+      this.color = '#FAC775';
+      this.rotation = 0; this.rotSpeed = 0;
+    }
+  }
+
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += this.gravity;
+    this.life -= this.decay;
+    this.rotation += this.rotSpeed;
+    this.vx *= 0.99;
+  }
+
+  draw(c) {
+    if (this.life <= 0) return;
+    c.save();
+    c.globalAlpha = Math.max(0, this.life);
+    c.translate(this.x, this.y);
+
+    if (this.type === 'confetti') {
+      c.rotate(this.rotation * Math.PI / 180);
+      c.fillStyle = this.color;
+      c.fillRect(-this.size/2, -this.size/4, this.size, this.size/2);
+    } else if (this.type === 'fire') {
+      const grad = c.createRadialGradient(0, 0, 0, 0, 0, this.size);
+      const t = 1 - this.life;
+      if (t < 0.3) {
+        grad.addColorStop(0, 'rgba(255,255,200,' + this.life + ')');
+        grad.addColorStop(1, 'rgba(255,107,53,0)');
+      } else {
+        grad.addColorStop(0, 'rgba(255,107,53,' + (this.life * 0.8) + ')');
+        grad.addColorStop(1, 'rgba(200,50,20,0)');
+      }
+      c.fillStyle = grad;
+      c.beginPath();
+      c.arc(0, 0, this.size * this.life, 0, Math.PI * 2);
+      c.fill();
+    } else if (this.type === 'spark') {
+      c.fillStyle = this.color;
+      c.globalAlpha = this.life;
+      c.beginPath();
+      c.arc(0, 0, this.size * this.life, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.restore();
+  }
+}
+
+function spawnBurst(x, y, count, type) {
+  for (let i = 0; i < count; i++) {
+    particles.push(new Particle(x, y, type));
+  }
+}
+
+function updateParticles() {
+  vfxCtx.clearRect(0, 0, vfxCanvas.width, vfxCanvas.height);
+  particles = particles.filter(p => p.life > 0);
+  for (const p of particles) {
+    p.update();
+    p.draw(vfxCtx);
+  }
+}
+
+// ═══════════════════════════════════════
+//  ELECTRIC AURA (drawn on pose canvas)
+// ═══════════════════════════════════════
+let auraPhase = 0;
+
+function drawElectricAura(cx, cy, w, h, intensity) {
+  auraPhase += 0.15;
+  const rings = 3;
+  for (let r = 0; r < rings; r++) {
+    const radius = 22 + r * 14 + Math.sin(auraPhase + r * 2) * 4;
+    const alpha = (0.5 - r * 0.12) * intensity;
+    const segments = 24;
+
+    ctx.beginPath();
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      const jitter = Math.sin(auraPhase * 3 + i * 1.7 + r) * (4 + r * 2);
+      const px = cx + Math.cos(angle) * (radius + jitter);
+      const py = cy + Math.sin(angle) * (radius + jitter);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = `rgba(93,202,165,${alpha})`;
+    ctx.lineWidth = 2.5 - r * 0.5;
+    ctx.shadowColor = '#5DCAA5';
+    ctx.shadowBlur = 15;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // Spark points
+  for (let i = 0; i < 4; i++) {
+    const angle = auraPhase * 2 + i * (Math.PI / 2);
+    const dist = 28 + Math.sin(auraPhase * 4 + i) * 10;
+    const sx = cx + Math.cos(angle) * dist;
+    const sy = cy + Math.sin(angle) * dist;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${0.7 + Math.sin(auraPhase * 5 + i) * 0.3})`;
+    ctx.shadowColor = '#5DCAA5';
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+}
+
+function drawFireAura(cx, cy) {
+  auraPhase += 0.12;
+  const rings = 4;
+  for (let r = 0; r < rings; r++) {
+    const radius = 20 + r * 12 + Math.sin(auraPhase + r * 1.5) * 6;
+    const segments = 20;
+    ctx.beginPath();
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      const jitter = Math.sin(auraPhase * 4 + i * 2.3 + r) * (6 + r * 3);
+      const px = cx + Math.cos(angle) * (radius + jitter);
+      const py = cy + Math.sin(angle) * (radius + jitter);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    const alpha = (0.6 - r * 0.12);
+    ctx.strokeStyle = r < 2 ? `rgba(255,107,53,${alpha})` : `rgba(250,199,117,${alpha * 0.7})`;
+    ctx.lineWidth = 3 - r * 0.5;
+    ctx.shadowColor = '#FF6B35';
+    ctx.shadowBlur = 20;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+}
+
+// ═══════════════════════════════════════
+//  PROMPT & UI HELPERS
+// ═══════════════════════════════════════
+function setPrompt(state) {
+  const p = document.getElementById('prompt');
+  const s = document.getElementById('hand-status');
+  if (state === 'armed') {
+    p.textContent = 'NOW DROP!';
+    p.className = streak.fireMode ? 'prompt-box fire' : 'prompt-box armed';
+    s.textContent = 'ARMED';
+    s.className = 'hand-status armed';
+  } else {
+    p.textContent = 'raise both hands above your head';
+    p.className = streak.fireMode ? 'prompt-box fire' : 'prompt-box';
+  }
+}
+
+// ═══════════════════════════════════════
+//  TRIGGER COUNT (all VFX here)
+// ═══════════════════════════════════════
+function triggerCount() {
+  gameState.count++;
+  registerCount();
+
+  const countEl = document.getElementById('count');
+  countEl.textContent = gameState.count;
+
+  // Neon pop / fire pop
+  countEl.classList.remove('pop', 'fire-pop');
+  void countEl.offsetWidth;
+  countEl.classList.add(streak.fireMode ? 'fire-pop' : 'pop');
+
+  // Screen shake
+  const gameScreen = document.getElementById('game-screen');
+  gameScreen.classList.remove('shake', 'big-shake');
+  void gameScreen.offsetWidth;
+  gameScreen.classList.add(streak.fireMode ? 'big-shake' : 'shake');
+
+  // Particle burst at screen center
+  const cx = vfxCanvas.width / 2;
+  const cy = vfxCanvas.height * 0.45;
+  if (streak.fireMode) {
+    spawnBurst(cx, cy, 50, 'fire');
+    spawnBurst(cx, cy, 30, 'confetti');
+    spawnBurst(cx, cy, 20, 'spark');
+  } else {
+    spawnBurst(cx, cy, 35, 'confetti');
+    spawnBurst(cx, cy, 12, 'spark');
+  }
+
+  setPrompt('idle');
+}
+
+// ═══════════════════════════════════════
+//  MODEL / CAMERA / GAME
+// ═══════════════════════════════════════
 async function loadModel() {
   const status = document.getElementById('status');
   status.innerHTML = '<span class="spinner"></span>loading pose model...';
@@ -441,8 +690,7 @@ async function loadModel() {
             modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
             delegate
           },
-          runningMode: 'VIDEO',
-          numPoses: 1,
+          runningMode: 'VIDEO', numPoses: 1,
           minPoseDetectionConfidence: 0.5,
           minPosePresenceConfidence: 0.5,
           minTrackingConfidence: 0.5,
@@ -450,88 +698,75 @@ async function loadModel() {
         console.log('Pose model loaded with:', delegate);
         break;
       } catch (e) {
-        console.warn(delegate + ' delegate failed:', e.message);
+        console.warn(delegate + ' failed:', e.message);
         if (delegate === 'CPU') throw e;
       }
     }
     status.innerHTML = 'ready to play';
     setTimeout(() => { status.textContent = ''; }, 2000);
   } catch (err) {
-    status.textContent = 'model failed to load — try refreshing';
-    console.error('Model load error:', err);
+    status.textContent = 'model failed — try refreshing';
+    console.error(err);
   }
 }
 
-// ─── CAMERA ───
 async function startCamera() {
   try {
-    const options = [
-      { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 640 } },
-      { facingMode: 'user', width: { ideal: 360 }, height: { ideal: 480 } },
-      { facingMode: 'user' },
-      true,
+    const opts = [
+      { facingMode:'user', width:{ideal:480}, height:{ideal:640} },
+      { facingMode:'user', width:{ideal:360}, height:{ideal:480} },
+      { facingMode:'user' }, true,
     ];
     let stream = null;
-    for (const c of options) {
-      try { stream = await navigator.mediaDevices.getUserMedia({ video: c, audio: false }); break; }
+    for (const c of opts) {
+      try { stream = await navigator.mediaDevices.getUserMedia({ video:c, audio:false }); break; }
       catch(e) { console.warn('cam fallback', e.message); }
     }
     if (!stream) throw new Error('Cannot access camera');
     video.srcObject = stream;
     gameState.stream = stream;
-
     return new Promise((resolve, reject) => {
       video.onloadedmetadata = () => {
         video.play().then(() => {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          vfxCanvas.width = window.innerWidth; vfxCanvas.height = window.innerHeight;
           resolve();
         }).catch(reject);
       };
       video.onerror = reject;
       setTimeout(() => {
         if (video.readyState >= 2) {
-          canvas.width = video.videoWidth || 360;
-          canvas.height = video.videoHeight || 480;
+          canvas.width = video.videoWidth || 360; canvas.height = video.videoHeight || 480;
+          vfxCanvas.width = window.innerWidth; vfxCanvas.height = window.innerHeight;
           resolve();
         }
       }, 3000);
     });
-  } catch (err) {
-    alert('Camera access is required. Please allow it and try again.');
-    throw err;
-  }
+  } catch (err) { alert('Camera access required.'); throw err; }
 }
 
 function stopCamera() {
-  if (gameState.stream) {
-    gameState.stream.getTracks().forEach(t => t.stop());
-    gameState.stream = null;
-  }
+  if (gameState.stream) { gameState.stream.getTracks().forEach(t => t.stop()); gameState.stream = null; }
   video.srcObject = null;
 }
 
-// ─── GAME FLOW ───
 let lastDetectTime = -1;
 
 window.startGame = async function() {
-  if (!poseLandmarker) {
-    await loadModel();
-    if (!poseLandmarker) return;
-  }
+  if (!poseLandmarker) { await loadModel(); if (!poseLandmarker) return; }
   showScreen('game-screen');
   await startCamera();
 
-  gameState.active = true;
-  gameState.count = 0;
-  gameState.timeLeft = 30;
-  gameState.startTime = Date.now();
-  lastDetectTime = -1;
-  resetSM();
+  gameState.active = true; gameState.count = 0; gameState.timeLeft = 30;
+  gameState.startTime = Date.now(); lastDetectTime = -1;
+  resetSM(); resetStreak(); particles = []; auraPhase = 0;
 
   document.getElementById('count').textContent = '0';
+  document.getElementById('count').className = 'count-display';
   document.getElementById('timer').textContent = '0:30';
   document.getElementById('timer').classList.remove('warning');
+  document.getElementById('count-label').textContent = '6 · 7';
+  document.getElementById('count-label').style.color = '';
   document.getElementById('prompt').textContent = 'raise both hands above your head';
   document.getElementById('prompt').className = 'prompt-box';
 
@@ -560,6 +795,7 @@ window.endGame = function() {
 
   document.getElementById('final-count').textContent = count;
   document.getElementById('per-sec').textContent = (count / 30).toFixed(1);
+  document.getElementById('best-streak').textContent = streak.best;
   document.getElementById('best').textContent = isNewBest ? count : prevBest;
   document.getElementById('new-best').style.display = isNewBest ? 'inline-block' : 'none';
 
@@ -578,7 +814,9 @@ window.showScreen = function(id) {
   document.getElementById(id).classList.add('active');
 }
 
-// ─── DETECT LOOP ───
+// ═══════════════════════════════════════
+//  DETECT + RENDER LOOP
+// ═══════════════════════════════════════
 function detectLoop() {
   if (!gameState.active) return;
   if (video.readyState >= 2 && poseLandmarker) {
@@ -588,156 +826,107 @@ function detectLoop() {
       try {
         const results = poseLandmarker.detectForVideo(video, Math.round(now));
         processResults(results);
-      } catch(e) { /* skip bad frame */ }
+      } catch(e) {}
     }
   }
+  updateParticles();
+  updateFireMode();
   requestAnimationFrame(detectLoop);
 }
 
 function processResults(results) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const statusEl = document.getElementById('hand-status');
-  const promptEl = document.getElementById('prompt');
 
   if (!results.landmarks || results.landmarks.length === 0) {
     sm.lostFrames++;
     if (sm.lostFrames > 15) {
       statusEl.textContent = 'looking for you...';
       statusEl.className = 'hand-status not-detected';
-      if (sm.state !== 'idle') {
-        promptEl.textContent = 'step back so camera sees your upper body';
-        promptEl.className = 'prompt-box';
-      }
       if (sm.lostFrames > 60) resetSM();
     }
     return;
   }
 
   sm.lostFrames = 0;
-  const pose = results.landmarks[0]; // first (only) person
+  const pose = results.landmarks[0];
+  const nose = pose[NOSE], lSh = pose[L_SHOULDER], rSh = pose[R_SHOULDER];
+  const lWr = pose[L_WRIST], rWr = pose[R_WRIST];
 
-  // Check we have the landmarks we need with sufficient visibility
-  const nose      = pose[NOSE];
-  const lShoulder = pose[L_SHOULDER];
-  const rShoulder = pose[R_SHOULDER];
-  const lWrist    = pose[L_WRIST];
-  const rWrist    = pose[R_WRIST];
+  drawPose(pose, nose, lSh, rSh, lWr, rWr);
 
-  // Draw skeleton and zones
-  drawPose(pose, nose, lShoulder, rShoulder);
-
-  // Update status
   if (sm.state !== 'armed') {
     statusEl.textContent = 'tracking you';
     statusEl.className = 'hand-status detected';
   }
 
-  // ── Run state machine ──
-  const counted = processPose(nose, lShoulder, rShoulder, lWrist, rWrist);
-
-  if (counted) {
-    gameState.count++;
-    const countEl = document.getElementById('count');
-    countEl.textContent = gameState.count;
-    countEl.classList.remove('pulse');
-    void countEl.offsetWidth;
-    countEl.classList.add('pulse');
-
-    const flash = document.getElementById('count-flash');
-    flash.classList.add('active');
-    setTimeout(() => flash.classList.remove('active'), 150);
-
-    spawnParticle();
-  }
+  const counted = processPose(nose, lSh, rSh, lWr, rWr);
+  if (counted) triggerCount();
 }
 
-// ─── DRAWING ───
-function drawPose(pose, nose, lShoulder, rShoulder) {
-  const w = canvas.width;
-  const h = canvas.height;
-
-  // Draw threshold zones
+// ═══════════════════════════════════════
+//  DRAWING
+// ═══════════════════════════════════════
+function drawPose(pose, nose, lSh, rSh, lWr, rWr) {
+  const w = canvas.width, h = canvas.height;
   const noseY = nose.y * h;
-  const shoulderY = ((lShoulder.y + rShoulder.y) / 2) * h;
+  const shoulderY = ((lSh.y + rSh.y) / 2) * h;
 
-  // Head line (ARM threshold)
-  ctx.strokeStyle = sm.state === 'armed' ? 'rgba(93,202,165,0.8)' : 'rgba(175,169,236,0.4)';
-  ctx.lineWidth = 2;
+  // Threshold lines
   ctx.setLineDash([8, 6]);
-  ctx.beginPath();
-  ctx.moveTo(0, noseY);
-  ctx.lineTo(w, noseY);
-  ctx.stroke();
-
-  // Shoulder line (FIRE threshold)
-  ctx.strokeStyle = 'rgba(250,199,117,0.4)';
-  ctx.beginPath();
-  ctx.moveTo(0, shoulderY);
-  ctx.lineTo(w, shoulderY);
-  ctx.stroke();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = sm.state === 'armed' ? 'rgba(93,202,165,0.7)' : 'rgba(175,169,236,0.3)';
+  ctx.beginPath(); ctx.moveTo(0, noseY); ctx.lineTo(w, noseY); ctx.stroke();
+  ctx.strokeStyle = 'rgba(250,199,117,0.3)';
+  ctx.beginPath(); ctx.moveTo(0, shoulderY); ctx.lineTo(w, shoulderY); ctx.stroke();
   ctx.setLineDash([]);
 
-  // Zone labels (mirrored because canvas is flipped)
-  ctx.font = '11px -apple-system, sans-serif';
-  ctx.fillStyle = 'rgba(175,169,236,0.7)';
-  ctx.fillText('HEAD LINE', 8, noseY - 6);
-  ctx.fillStyle = 'rgba(250,199,117,0.7)';
-  ctx.fillText('SHOULDER LINE', 8, shoulderY - 6);
+  // Labels
+  ctx.font = '10px -apple-system, sans-serif';
+  ctx.fillStyle = 'rgba(175,169,236,0.5)'; ctx.fillText('HEAD', 6, noseY - 4);
+  ctx.fillStyle = 'rgba(250,199,117,0.5)'; ctx.fillText('SHOULDERS', 6, shoulderY - 4);
 
-  // Draw key landmarks
-  const lWrist = pose[L_WRIST];
-  const rWrist = pose[R_WRIST];
-
-  // Wrists — big circles, color-coded by state
-  const wristColor = sm.state === 'armed' ? '#5DCAA5' : '#FAC775';
-  const wristGlow  = sm.state === 'armed' ? 'rgba(93,202,165,0.6)' : 'rgba(250,199,117,0.4)';
-  for (const wrist of [lWrist, rWrist]) {
-    // Glow
-    ctx.beginPath();
-    ctx.arc(wrist.x * w, wrist.y * h, 18, 0, Math.PI * 2);
-    ctx.fillStyle = wristGlow;
-    ctx.fill();
-    // Solid
-    ctx.beginPath();
-    ctx.arc(wrist.x * w, wrist.y * h, 10, 0, Math.PI * 2);
-    ctx.fillStyle = wristColor;
-    ctx.fill();
-  }
-
-  // Shoulders — smaller
-  for (const sh of [lShoulder, rShoulder]) {
-    ctx.beginPath();
-    ctx.arc(sh.x * w, sh.y * h, 6, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(250,199,117,0.6)';
-    ctx.fill();
-  }
-
-  // Nose
+  // Arm lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(nose.x * w, nose.y * h, 5, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(175,169,236,0.8)';
-  ctx.fill();
-
-  // Arm lines (shoulder → wrist)
-  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(lShoulder.x * w, lShoulder.y * h);
-  ctx.lineTo(lWrist.x * w, lWrist.y * h);
-  ctx.moveTo(rShoulder.x * w, rShoulder.y * h);
-  ctx.lineTo(rWrist.x * w, rWrist.y * h);
+  ctx.moveTo(lSh.x*w, lSh.y*h); ctx.lineTo(lWr.x*w, lWr.y*h);
+  ctx.moveTo(rSh.x*w, rSh.y*h); ctx.lineTo(rWr.x*w, rWr.y*h);
   ctx.stroke();
-}
 
-function spawnParticle() {
-  const p = document.createElement('div');
-  p.className = 'particle';
-  p.textContent = Math.random() > 0.5 ? '6' : '7';
-  p.style.color = Math.random() > 0.5 ? '#FAC775' : '#AFA9EC';
-  p.style.left = (30 + Math.random() * 40) + '%';
-  p.style.top = '50%';
-  document.querySelector('#game-screen').appendChild(p);
-  setTimeout(() => p.remove(), 1000);
+  // Shoulders + nose
+  for (const pt of [lSh, rSh]) {
+    ctx.beginPath(); ctx.arc(pt.x*w, pt.y*h, 5, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(250,199,117,0.5)'; ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(nose.x*w, nose.y*h, 4, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(175,169,236,0.6)'; ctx.fill();
+
+  // Wrists with aura
+  for (const wr of [lWr, rWr]) {
+    const wx = wr.x * w, wy = wr.y * h;
+
+    if (sm.state === 'armed') {
+      if (streak.fireMode) {
+        drawFireAura(wx, wy);
+      } else {
+        drawElectricAura(wx, wy, w, h, 1);
+      }
+    }
+
+    // Wrist glow
+    ctx.beginPath(); ctx.arc(wx, wy, 16, 0, Math.PI*2);
+    ctx.fillStyle = sm.state === 'armed'
+      ? (streak.fireMode ? 'rgba(255,107,53,0.5)' : 'rgba(93,202,165,0.5)')
+      : 'rgba(250,199,117,0.3)';
+    ctx.fill();
+
+    // Wrist solid
+    ctx.beginPath(); ctx.arc(wx, wy, 8, 0, Math.PI*2);
+    ctx.fillStyle = sm.state === 'armed'
+      ? (streak.fireMode ? '#FF6B35' : '#5DCAA5')
+      : '#FAC775';
+    ctx.fill();
+  }
 }
 
 // ─── INIT ───
