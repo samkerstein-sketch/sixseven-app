@@ -534,15 +534,16 @@ let gameState = {
 let tracker = {
   lastY: null,
   direction: null,
-  peaks: 0,
-  troughs: 0,
   lastCountTime: 0,
-  amplitude: 0,
   extremeY: null,
+  smoothY: null,
+  noHandFrames: 0,
 };
 
-const MIN_AMPLITUDE = 0.06;
-const MIN_CYCLE_MS = 200;
+const MIN_AMPLITUDE = 0.04;
+const MIN_CYCLE_MS = 150;
+const SMOOTH_FACTOR = 0.4;
+const DIR_THRESHOLD = 0.005;
 
 async function loadModel() {
   const status = document.getElementById('status');
@@ -607,7 +608,7 @@ window.startGame = async function() {
   gameState.count = 0;
   gameState.timeLeft = 30;
   gameState.startTime = Date.now();
-  tracker = { lastY: null, direction: null, peaks: 0, troughs: 0, lastCountTime: 0, amplitude: 0, extremeY: null };
+  tracker = { lastY: null, direction: null, lastCountTime: 0, extremeY: null, smoothY: null, noHandFrames: 0 };
 
   document.getElementById('count').textContent = '0';
   document.getElementById('timer').textContent = '0:30';
@@ -670,30 +671,29 @@ function processResults(results) {
   const status = document.getElementById('hand-status');
 
   if (!results.landmarks || results.landmarks.length === 0) {
-    status.textContent = 'looking for hands...';
-    status.className = 'hand-status not-detected';
-    tracker.lastY = null;
+    tracker.noHandFrames++;
+    if (tracker.noHandFrames > 10) {
+      status.textContent = 'looking for hands...';
+      status.className = 'hand-status not-detected';
+      tracker.lastY = null;
+      tracker.smoothY = null;
+    }
     return;
   }
 
+  tracker.noHandFrames = 0;
   status.textContent = `${results.landmarks.length} hand${results.landmarks.length > 1 ? 's' : ''} detected`;
   status.className = 'hand-status detected';
 
   drawHands(results.landmarks);
 
   let avgY = 0;
-  let palmsUp = 0;
   for (const hand of results.landmarks) {
     const wrist = hand[0];
-    const middleMCP = hand[9];
-    avgY += (wrist.y + middleMCP.y) / 2;
-    if (wrist.y > middleMCP.y) palmsUp++;
+    const middleTip = hand[12];
+    avgY += (wrist.y + middleTip.y) / 2;
   }
   avgY /= results.landmarks.length;
-
-  if (palmsUp < results.landmarks.length * 0.5) {
-    return;
-  }
 
   trackMotion(avgY);
 }
@@ -728,15 +728,20 @@ function drawHands(landmarks) {
   }
 }
 
-function trackMotion(y) {
-  if (tracker.lastY === null) {
-    tracker.lastY = y;
-    tracker.extremeY = y;
+function trackMotion(rawY) {
+  if (tracker.smoothY === null) {
+    tracker.smoothY = rawY;
+    tracker.lastY = rawY;
+    tracker.extremeY = rawY;
     return;
   }
 
+  // Smooth the Y value to reduce noise
+  tracker.smoothY = tracker.smoothY * (1 - SMOOTH_FACTOR) + rawY * SMOOTH_FACTOR;
+  const y = tracker.smoothY;
+
   const dy = y - tracker.lastY;
-  const newDirection = dy > 0.002 ? 'down' : dy < -0.002 ? 'up' : tracker.direction;
+  const newDirection = dy > DIR_THRESHOLD ? 'down' : dy < -DIR_THRESHOLD ? 'up' : tracker.direction;
 
   if (newDirection && newDirection !== tracker.direction) {
     if (tracker.direction !== null) {
@@ -744,17 +749,17 @@ function trackMotion(y) {
       const now = performance.now();
       const elapsed = now - tracker.lastCountTime;
 
+      // Count on BOTH direction changes (up→down AND down→up) = each peak and valley
       if (amplitude >= MIN_AMPLITUDE && elapsed >= MIN_CYCLE_MS) {
-        if (tracker.direction === 'up' && newDirection === 'down') {
-          countUp();
-          tracker.lastCountTime = now;
-        }
+        countUp();
+        tracker.lastCountTime = now;
       }
     }
     tracker.extremeY = y;
     tracker.direction = newDirection;
   }
 
+  // Track the extreme point in current direction
   if ((tracker.direction === 'up' && y < tracker.extremeY) ||
       (tracker.direction === 'down' && y > tracker.extremeY)) {
     tracker.extremeY = y;
