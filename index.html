@@ -213,6 +213,56 @@ body {
 .hand-status.detected { background: rgba(29,158,117,0.3); border-color: rgba(93,202,165,0.6); color: #5DCAA5; }
 .hand-status.armed { background: rgba(93,202,165,0.5); border-color: #5DCAA5; color: white; }
 .hand-status.not-detected { color: rgba(255,255,255,0.5); }
+.hand-status.half { background: rgba(250,199,117,0.4); border-color: #FAC775; color: #FAC775; }
+
+/* ── HAND INDICATORS (left/right badges) ── */
+.hand-indicators {
+  position: absolute; top: 80px; left: 0; right: 0;
+  display: flex; justify-content: center; gap: 60px;
+  pointer-events: none; z-index: 20;
+}
+.hand-badge {
+  width: 56px; height: 56px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 900; letter-spacing: -1px;
+  transition: all 0.25s; border: 2px solid rgba(255,255,255,0.15);
+  background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+  color: rgba(255,255,255,0.3); opacity: 0.6;
+}
+.hand-badge.waiting {
+  border-color: rgba(175,169,236,0.5); color: #AFA9EC;
+  opacity: 1; animation: badge-pulse 1.2s ease-in-out infinite;
+}
+.hand-badge.done {
+  border-color: #5DCAA5; color: #5DCAA5;
+  background: rgba(93,202,165,0.25); opacity: 1;
+  box-shadow: 0 0 20px rgba(93,202,165,0.4);
+}
+.hand-badge.next {
+  border-color: #FAC775; color: #FAC775;
+  background: rgba(250,199,117,0.2); opacity: 1;
+  animation: badge-next 0.8s ease-in-out infinite;
+}
+@keyframes badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+@keyframes badge-next {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 10px rgba(250,199,117,0.3); }
+  50% { transform: scale(1.1); box-shadow: 0 0 25px rgba(250,199,117,0.6); }
+}
+
+/* Phase B countdown ring */
+.phase-timer {
+  position: absolute; top: 145px; left: 50%; transform: translateX(-50%);
+  font-size: 11px; font-weight: 700; color: #FAC775;
+  background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+  padding: 4px 12px; border-radius: 12px;
+  border: 1px solid rgba(250,199,117,0.4);
+  pointer-events: none; z-index: 20;
+  opacity: 0; transition: opacity 0.2s;
+}
+.phase-timer.visible { opacity: 1; }
 
 /* ── SCREEN SHAKE ── */
 #game-screen.shake { animation: screen-shake 0.35s ease-out; }
@@ -273,13 +323,13 @@ body {
   <div id="start-screen" class="screen active">
     <div class="logo"><span class="six">6</span><span class="seven">7</span></div>
     <div class="tagline">67 COUNTER</div>
-    <div class="subtitle">raise your hands up, then drop them — count your reps in 30 seconds</div>
+    <div class="subtitle">raise one hand up then drop it, then the other — alternating 6-7 style!</div>
     <button class="btn-primary" id="start-btn" onclick="startGame()">START</button>
     <div class="loading-status" id="status"></div>
     <div class="how-to">
       <div class="how-to-row"><div class="step-num">1</div><span>allow camera — stand so your upper body is visible</span></div>
-      <div class="how-to-row"><div class="step-num">2</div><span>raise your hands up</span></div>
-      <div class="how-to-row"><div class="step-num">3</div><span>drop them down — that's one rep!</span></div>
+      <div class="how-to-row"><div class="step-num">2</div><span>raise one hand up, then drop it</span></div>
+      <div class="how-to-row"><div class="step-num">3</div><span>now do the other hand within 3 sec — that's a 6-7!</span></div>
     </div>
   </div>
 
@@ -297,6 +347,11 @@ body {
         </div>
       </div>
       <div class="hand-status not-detected" id="hand-status">looking for you...</div>
+      <div class="hand-indicators">
+        <div class="hand-badge" id="badge-right">R</div>
+        <div class="hand-badge" id="badge-left">L</div>
+      </div>
+      <div class="phase-timer" id="phase-timer">3.0s</div>
       <div class="streak-badge" id="streak-badge">STREAK</div>
       <div class="center-display">
         <div class="count-display" id="count">0</div>
@@ -349,130 +404,250 @@ let gameState = {
 };
 
 // ═══════════════════════════════════════
-//  STATE MACHINE — SENSITIVE & DYNAMIC
+//  STATE MACHINE — ALTERNATING HANDS
 // ═══════════════════════════════════════
 //
-//  ARM threshold : forehead level (midpoint between eyes & nose)
-//                  NOT above the head — much more forgiving.
-//  FIRE threshold: midpoint between nose & shoulders — a short
-//                  snap down counts, no need to drop all the way.
-//  All thresholds scaled by noseToShoulder distance so it works
-//  for any body size / camera distance.
+//  Each hand is tracked independently through its own
+//  raise→drop micro-cycle. A full "6-7" count requires:
 //
-//  Low-pass filter on wrist Y prevents armed-state flicker.
+//  Phase A: ONE hand raises above eye level then drops
+//           below shoulder level → "half-way" feedback.
+//  Phase B: The OPPOSITE hand must do the same within 3s.
+//           Success → COUNT++, full VFX explosion, reset.
+//           Same hand again → ignored.
+//           3s timeout → reset to Phase A.
+//
+//  Thresholds are body-proportional (nose→shoulder distance).
 // ═══════════════════════════════════════
 
-const ARM_CONFIRM  = 2;   // frames to confirm armed (flicker guard)
-const FIRE_CONFIRM = 1;   // only 1 frame for rapid release
-const MIN_CYCLE_MS = 60;  // very fast cycles allowed
+const ARM_CONFIRM  = 2;   // frames to confirm hand is raised
+const FIRE_CONFIRM = 1;   // 1 frame for rapid drop
+const MIN_CYCLE_MS = 60;  // min time between counts
+const PHASE_B_TIMEOUT = 3000; // 3 seconds to complete phase B
 
-// Thresholds as fractions of nose→shoulder distance
-const ARM_ZONE  = -0.10;  // NEGATIVE = arm line is BELOW forehead (at ~eye level)
-const FIRE_ZONE = 0.05;   // tiny margin below fire line — small snap counts
+// Thresholds as fractions of bodyUnit (nose→shoulder distance)
+const ARM_ZONE  = -0.10;  // arm line at eye level (below forehead)
+const DROP_ZONE = 0.90;   // drop line at shoulder level
 
-// Low-pass filter (smoothed wrist Y)
-const WRIST_SMOOTH = 0.30; // lighter smoothing for snappier response
+// Low-pass filter
+const WRIST_SMOOTH = 0.30;
 let smoothLWristY = null;
 let smoothRWristY = null;
 
-let sm = { state:'idle', armFrames:0, fireFrames:0, lastCountTime:0, lostFrames:0 };
+// Per-hand state: 'idle' → 'raised' → 'dropped'
+let leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
+let rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
+
+// Sequence state
+let sm = {
+  phase: 'A',           // 'A' = waiting for first hand, 'B' = waiting for opposite
+  completedHand: null,   // 'left' or 'right' — which hand finished phase A
+  phaseBStart: 0,        // timestamp when phase B started
+  lastCountTime: 0,
+  lostFrames: 0,
+  _armLineY: 0,
+  _fireLineY: 0,
+};
+
 function resetSM() {
-  sm = { state:'idle', armFrames:0, fireFrames:0, lastCountTime:0, lostFrames:0 };
+  leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
+  rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
+  sm = {
+    phase: 'A', completedHand: null, phaseBStart: 0,
+    lastCountTime: 0, lostFrames: 0, _armLineY: 0, _fireLineY: 0,
+  };
   smoothLWristY = null;
   smoothRWristY = null;
-  prevSmLWristY = null;
-  prevSmRWristY = null;
+  updateHandBadges();
+  document.getElementById('phase-timer').classList.remove('visible');
 }
 
-/**
- * Smooth a value with a low-pass filter.
- * Returns smoothed value. prev=null → initialize.
- */
 function lowPass(prev, raw, alpha) {
   if (prev === null) return raw;
   return prev * alpha + raw * (1 - alpha);
 }
 
 /**
- * Core 6-7 detection.
- * Uses dynamic body-proportional thresholds + smoothed wrists.
+ * Check a single hand's raise→drop micro-cycle.
+ * Returns true if this hand just completed a full raise+drop.
  */
-// Velocity tracking for rapid-release detection
-let prevSmLWristY = null;
-let prevSmRWristY = null;
-const VELOCITY_FIRE_THRESHOLD = 0.008; // min downward velocity to insta-fire
-
-function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
-  // ── Dynamic reference points ──
-  const shoulderY  = (lShoulder.y + rShoulder.y) / 2;
-  const noseY      = nose.y;
-  const eyeY       = (lEye.y + rEye.y) / 2;
-  const bodyUnit   = shoulderY - noseY; // distance nose→shoulders (always positive)
-  if (bodyUnit < 0.01) return false;    // face not properly visible
-
-  // ARM line: at eye level (ARM_ZONE is negative, so this is BELOW forehead)
-  const foreheadY = (eyeY + noseY) / 2;
-  const armThreshold  = foreheadY - bodyUnit * ARM_ZONE;
-
-  // FIRE line: just below nose (closer to nose than shoulders for snappier drop)
-  const fireLineY = noseY + bodyUnit * 0.3; // 30% down from nose toward shoulders
-  const fireThreshold = fireLineY + bodyUnit * FIRE_ZONE;
-
-  // ── Smooth wrist Y coordinates ──
-  prevSmLWristY = smoothLWristY;
-  prevSmRWristY = smoothRWristY;
-  smoothLWristY = lowPass(smoothLWristY, lWrist.y, WRIST_SMOOTH);
-  smoothRWristY = lowPass(smoothRWristY, rWrist.y, WRIST_SMOOTH);
-
-  // ── Velocity (positive = moving DOWN in screen coords) ──
-  const velL = prevSmLWristY !== null ? smoothLWristY - prevSmLWristY : 0;
-  const velR = prevSmRWristY !== null ? smoothRWristY - prevSmRWristY : 0;
-  const avgVelocity = (velL + velR) / 2;
-
-  // ── Zone checks ──
-  const bothAboveArm = smoothLWristY < armThreshold && smoothRWristY < armThreshold;
-  const bothBelowFire = smoothLWristY > fireThreshold && smoothRWristY > fireThreshold;
-  // Velocity-based: even if not past fire line, a fast downward snap counts
-  const rapidSnap = avgVelocity > VELOCITY_FIRE_THRESHOLD && !bothAboveArm;
-
-  // Store for drawing
-  sm._armLineY  = armThreshold;
-  sm._fireLineY = fireThreshold;
-
-  const now = performance.now();
-
-  switch (sm.state) {
+function processHand(hand, smoothY, armThreshold, dropThreshold) {
+  switch (hand.state) {
     case 'idle':
-      if (bothAboveArm) {
-        sm.armFrames++;
-        if (sm.armFrames >= ARM_CONFIRM) {
-          sm.state = 'armed';
-          sm.fireFrames = 0;
-          setPrompt('armed');
-        }
-      } else { sm.armFrames = 0; }
-      return false;
-
-    case 'armed':
-      // Still in arm zone? Keep armed, reset fire counter
-      if (bothAboveArm) { sm.fireFrames = 0; return false; }
-      // Check for the DROP — position-based OR velocity-based
-      if (bothBelowFire || rapidSnap) {
-        sm.fireFrames++;
-        if (sm.fireFrames >= FIRE_CONFIRM && (now - sm.lastCountTime) >= MIN_CYCLE_MS) {
-          sm.lastCountTime = now;
-          sm.state = 'idle';
-          sm.armFrames = 0;
-          sm.fireFrames = 0;
-          return true; // COUNT!
+      if (smoothY < armThreshold) {
+        hand.raisedFrames++;
+        if (hand.raisedFrames >= ARM_CONFIRM) {
+          hand.state = 'raised';
+          hand.dropFrames = 0;
         }
       } else {
-        // Between arm and fire line, not snapping fast — still transitioning
-        sm.fireFrames = 0;
+        hand.raisedFrames = 0;
       }
+      return false;
+
+    case 'raised':
+      // Still above arm line? Stay raised
+      if (smoothY < armThreshold) { hand.dropFrames = 0; return false; }
+      // Check for drop below shoulder level
+      if (smoothY > dropThreshold) {
+        hand.dropFrames++;
+        if (hand.dropFrames >= FIRE_CONFIRM) {
+          hand.state = 'dropped';
+          return true; // completed raise→drop!
+        }
+      } else {
+        hand.dropFrames = 0;
+      }
+      return false;
+
+    case 'dropped':
+      // Already completed — stays dropped until sequence resets this hand
       return false;
   }
   return false;
+}
+
+/**
+ * Core alternating-hand 6-7 detection.
+ * Returns true when a full count is completed.
+ */
+function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
+  const shoulderY = (lShoulder.y + rShoulder.y) / 2;
+  const noseY     = nose.y;
+  const eyeY      = (lEye.y + rEye.y) / 2;
+  const bodyUnit  = shoulderY - noseY;
+  if (bodyUnit < 0.01) return false;
+
+  // Thresholds
+  const foreheadY    = (eyeY + noseY) / 2;
+  const armThreshold = foreheadY - bodyUnit * ARM_ZONE; // eye level
+  const dropThreshold = shoulderY + bodyUnit * (DROP_ZONE - 1); // at shoulder level
+
+  // Smooth wrist Y
+  smoothLWristY = lowPass(smoothLWristY, lWrist.y, WRIST_SMOOTH);
+  smoothRWristY = lowPass(smoothRWristY, rWrist.y, WRIST_SMOOTH);
+
+  // Store for drawing
+  sm._armLineY  = armThreshold;
+  sm._fireLineY = dropThreshold;
+
+  const now = performance.now();
+
+  // Check phase B timeout
+  if (sm.phase === 'B' && (now - sm.phaseBStart) > PHASE_B_TIMEOUT) {
+    // Timeout — reset to phase A
+    sm.phase = 'A';
+    sm.completedHand = null;
+    leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
+    rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
+    setPrompt('idle');
+    updateHandBadges();
+    document.getElementById('phase-timer').classList.remove('visible');
+    return false;
+  }
+
+  // Process each hand independently
+  const leftDone  = processHand(leftHand,  smoothLWristY, armThreshold, dropThreshold);
+  const rightDone = processHand(rightHand, smoothRWristY, armThreshold, dropThreshold);
+
+  // Phase A: waiting for first hand to complete
+  if (sm.phase === 'A') {
+    if (leftDone || rightDone) {
+      const which = leftDone ? 'left' : 'right';
+      sm.phase = 'B';
+      sm.completedHand = which;
+      sm.phaseBStart = now;
+      // Reset only the opposite hand for phase B
+      const opposite = which === 'left' ? rightHand : leftHand;
+      opposite.state = 'idle';
+      opposite.raisedFrames = 0;
+      opposite.dropFrames = 0;
+      setPrompt('half', which);
+      triggerHalfwayVFX(which);
+      updateHandBadges();
+      document.getElementById('phase-timer').classList.add('visible');
+    } else {
+      // Show "raised" feedback per hand
+      if (leftHand.state === 'raised' || rightHand.state === 'raised') {
+        setPrompt('raising');
+      }
+    }
+    updateHandBadges();
+    return false;
+  }
+
+  // Phase B: waiting for the OPPOSITE hand
+  if (sm.phase === 'B') {
+    const neededHand = sm.completedHand === 'left' ? 'right' : 'left';
+    const neededDone = neededHand === 'left' ? leftDone : rightDone;
+
+    // Update phase timer display
+    const remaining = Math.max(0, PHASE_B_TIMEOUT - (now - sm.phaseBStart)) / 1000;
+    document.getElementById('phase-timer').textContent = remaining.toFixed(1) + 's';
+
+    if (neededDone && (now - sm.lastCountTime) >= MIN_CYCLE_MS) {
+      // SUCCESS — full 6-7!
+      sm.lastCountTime = now;
+      sm.phase = 'A';
+      sm.completedHand = null;
+      leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
+      rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
+      updateHandBadges();
+      document.getElementById('phase-timer').classList.remove('visible');
+      return true; // COUNT!
+    }
+
+    // Show raising feedback for the needed hand
+    const neededHandObj = neededHand === 'left' ? leftHand : rightHand;
+    if (neededHandObj.state === 'raised') {
+      setPrompt('almostB', neededHand);
+    }
+
+    updateHandBadges();
+    return false;
+  }
+
+  return false;
+}
+
+// ── Hand badge UI updates ──
+function updateHandBadges() {
+  const lBadge = document.getElementById('badge-left');
+  const rBadge = document.getElementById('badge-right');
+
+  // Reset
+  lBadge.className = 'hand-badge';
+  rBadge.className = 'hand-badge';
+
+  if (sm.phase === 'A') {
+    // Both hands waiting
+    if (leftHand.state === 'raised') lBadge.classList.add('waiting');
+    if (rightHand.state === 'raised') rBadge.classList.add('waiting');
+  } else if (sm.phase === 'B') {
+    // Completed hand = done, other = next
+    if (sm.completedHand === 'left') {
+      lBadge.classList.add('done');
+      rBadge.classList.add('next');
+    } else {
+      rBadge.classList.add('done');
+      lBadge.classList.add('next');
+    }
+  }
+}
+
+// ── Halfway VFX (small burst + prompt) ──
+function triggerHalfwayVFX(hand) {
+  // Small spark burst on the completed hand's side
+  const cx = vfxCanvas.width * (hand === 'left' ? 0.3 : 0.7);
+  const cy = vfxCanvas.height * 0.4;
+  spawnBurst(cx, cy, 15, 'spark');
+  spawnBurst(cx, cy, 8, 'confetti');
+
+  // Small screen pulse (not full shake)
+  const gameScreen = document.getElementById('game-screen');
+  gameScreen.classList.remove('shake', 'big-shake');
+  void gameScreen.offsetWidth;
+  // Quick subtle CSS pulse via a tiny shake
 }
 
 // ═══════════════════════════════════════
@@ -1092,20 +1267,49 @@ window.toggleMute = function() {
 // ═══════════════════════════════════════
 //  PROMPT & UI HELPERS
 // ═══════════════════════════════════════
-function setPrompt(state) {
+function setPrompt(state, hand) {
   const p = document.getElementById('prompt');
   const s = document.getElementById('hand-status');
-  if (state === 'armed') {
-    p.textContent = 'NOW DROP!';
-    p.className = streak.fireMode ? 'prompt-box fire' : 'prompt-box armed';
-    s.textContent = 'ARMED';
-    s.className = 'hand-status armed';
-    startChargeSFX();
-    setBGMFilter(true); // underwater muffle
-  } else {
-    p.textContent = 'raise your hands up';
-    p.className = streak.fireMode ? 'prompt-box fire' : 'prompt-box';
-    stopChargeSFX();
+  const handLabel = hand === 'left' ? 'LEFT' : hand === 'right' ? 'RIGHT' : '';
+  const otherLabel = hand === 'left' ? 'RIGHT' : hand === 'right' ? 'LEFT' : '';
+
+  switch (state) {
+    case 'idle':
+      p.textContent = 'raise one hand up';
+      p.className = streak.fireMode ? 'prompt-box fire' : 'prompt-box';
+      s.textContent = 'tracking you';
+      s.className = 'hand-status detected';
+      stopChargeSFX();
+      setBGMFilter(false);
+      break;
+    case 'raising':
+      p.textContent = 'now drop it!';
+      p.className = 'prompt-box armed';
+      s.textContent = 'HAND UP';
+      s.className = 'hand-status armed';
+      startChargeSFX();
+      setBGMFilter(true);
+      break;
+    case 'half':
+      p.textContent = `${handLabel} done — now ${otherLabel}!`;
+      p.className = 'prompt-box armed';
+      s.textContent = `${otherLabel} NEXT`;
+      s.className = 'hand-status half';
+      stopChargeSFX();
+      setBGMFilter(false);
+      break;
+    case 'almostB':
+      p.textContent = `DROP ${handLabel.toUpperCase()}!`;
+      p.className = streak.fireMode ? 'prompt-box fire' : 'prompt-box armed';
+      s.textContent = `${handLabel} UP — DROP!`;
+      s.className = 'hand-status armed';
+      startChargeSFX();
+      setBGMFilter(true);
+      break;
+    default:
+      p.textContent = 'raise one hand up';
+      p.className = streak.fireMode ? 'prompt-box fire' : 'prompt-box';
+      stopChargeSFX();
   }
 }
 
@@ -1148,7 +1352,7 @@ function triggerCount() {
     spawnBurst(cx, cy, 12, 'spark');
   }
 
-  setPrompt('idle');
+  setPrompt('idle', null);
 }
 
 // ═══════════════════════════════════════
@@ -1248,8 +1452,9 @@ window.startGame = async function() {
   document.getElementById('timer').classList.remove('warning');
   document.getElementById('count-label').textContent = '6 · 7';
   document.getElementById('count-label').style.color = '';
-  document.getElementById('prompt').textContent = 'raise your hands up';
+  document.getElementById('prompt').textContent = 'raise one hand up';
   document.getElementById('prompt').className = 'prompt-box';
+  document.getElementById('phase-timer').classList.remove('visible');
 
   gameState.timer = setInterval(() => {
     gameState.timeLeft--;
@@ -1342,11 +1547,6 @@ function processResults(results) {
 
   drawPose(pose, nose, lSh, rSh, lWr, rWr);
 
-  if (sm.state !== 'armed') {
-    statusEl.textContent = 'tracking you';
-    statusEl.className = 'hand-status detected';
-  }
-
   if (counted) triggerCount();
 }
 
@@ -1356,27 +1556,26 @@ function processResults(results) {
 function drawPose(pose, nose, lSh, rSh, lWr, rWr) {
   const w = canvas.width, h = canvas.height;
 
-  // Use the dynamically computed threshold lines from processPose
   const armLinePixel  = (sm._armLineY  || nose.y) * h;
   const fireLinePixel = (sm._fireLineY || ((lSh.y + rSh.y) / 2)) * h;
+
+  const anyRaised = leftHand.state === 'raised' || rightHand.state === 'raised';
 
   // Threshold lines
   ctx.setLineDash([8, 6]);
   ctx.lineWidth = 2;
-  // ARM line (forehead level)
-  ctx.strokeStyle = sm.state === 'armed' ? 'rgba(93,202,165,0.8)' : 'rgba(175,169,236,0.4)';
+  ctx.strokeStyle = anyRaised ? 'rgba(93,202,165,0.8)' : 'rgba(175,169,236,0.4)';
   ctx.beginPath(); ctx.moveTo(0, armLinePixel); ctx.lineTo(w, armLinePixel); ctx.stroke();
-  // FIRE line (halfway nose→shoulders)
-  ctx.strokeStyle = sm.state === 'armed' ? 'rgba(250,199,117,0.6)' : 'rgba(250,199,117,0.25)';
+  ctx.strokeStyle = anyRaised ? 'rgba(250,199,117,0.6)' : 'rgba(250,199,117,0.25)';
   ctx.beginPath(); ctx.moveTo(0, fireLinePixel); ctx.lineTo(w, fireLinePixel); ctx.stroke();
   ctx.setLineDash([]);
 
   // Labels
   ctx.font = '10px -apple-system, sans-serif';
   ctx.fillStyle = 'rgba(175,169,236,0.6)'; ctx.fillText('RAISE', 6, armLinePixel - 4);
-  ctx.fillStyle = 'rgba(250,199,117,0.5)'; ctx.fillText('SNAP', 6, fireLinePixel - 4);
+  ctx.fillStyle = 'rgba(250,199,117,0.5)'; ctx.fillText('DROP', 6, fireLinePixel - 4);
 
-  // Arm lines
+  // Arm skeleton lines
   ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(lSh.x*w, lSh.y*h); ctx.lineTo(lWr.x*w, lWr.y*h);
@@ -1391,11 +1590,20 @@ function drawPose(pose, nose, lSh, rSh, lWr, rWr) {
   ctx.beginPath(); ctx.arc(nose.x*w, nose.y*h, 4, 0, Math.PI*2);
   ctx.fillStyle = 'rgba(175,169,236,0.6)'; ctx.fill();
 
-  // Wrists with aura
-  for (const wr of [lWr, rWr]) {
-    const wx = wr.x * w, wy = wr.y * h;
+  // Per-hand wrist drawing with state-aware colors
+  const hands = [
+    { wr: lWr, hand: leftHand,  name: 'left' },
+    { wr: rWr, hand: rightHand, name: 'right' },
+  ];
 
-    if (sm.state === 'armed') {
+  for (const { wr, hand, name } of hands) {
+    const wx = wr.x * w, wy = wr.y * h;
+    const isRaised = hand.state === 'raised';
+    const isDone   = hand.state === 'dropped';
+    const isNext   = sm.phase === 'B' && sm.completedHand !== name;
+
+    // Aura on raised hand
+    if (isRaised) {
       if (streak.fireMode) {
         drawFireAura(wx, wy);
       } else {
@@ -1405,17 +1613,40 @@ function drawPose(pose, nose, lSh, rSh, lWr, rWr) {
 
     // Wrist glow
     ctx.beginPath(); ctx.arc(wx, wy, 16, 0, Math.PI*2);
-    ctx.fillStyle = sm.state === 'armed'
-      ? (streak.fireMode ? 'rgba(255,107,53,0.5)' : 'rgba(93,202,165,0.5)')
-      : 'rgba(250,199,117,0.3)';
+    if (isDone) {
+      ctx.fillStyle = 'rgba(93,202,165,0.5)'; // green = done
+    } else if (isRaised) {
+      ctx.fillStyle = streak.fireMode ? 'rgba(255,107,53,0.5)' : 'rgba(93,202,165,0.5)';
+    } else if (isNext) {
+      ctx.fillStyle = 'rgba(250,199,117,0.4)'; // gold = next up
+    } else {
+      ctx.fillStyle = 'rgba(250,199,117,0.3)';
+    }
     ctx.fill();
 
     // Wrist solid
     ctx.beginPath(); ctx.arc(wx, wy, 8, 0, Math.PI*2);
-    ctx.fillStyle = sm.state === 'armed'
-      ? (streak.fireMode ? '#FF6B35' : '#5DCAA5')
-      : '#FAC775';
+    if (isDone) {
+      ctx.fillStyle = '#5DCAA5';
+    } else if (isRaised) {
+      ctx.fillStyle = streak.fireMode ? '#FF6B35' : '#5DCAA5';
+    } else if (isNext) {
+      ctx.fillStyle = '#FAC775';
+    } else {
+      ctx.fillStyle = '#FAC775';
+    }
     ctx.fill();
+
+    // "DONE" / "NEXT" label near wrist
+    if (isDone && sm.phase === 'B') {
+      ctx.font = 'bold 11px -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(93,202,165,0.9)';
+      ctx.fillText('DONE', wx - 14, wy - 22);
+    } else if (isNext && sm.phase === 'B') {
+      ctx.font = 'bold 11px -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(250,199,117,0.9)';
+      ctx.fillText('NEXT', wx - 14, wy - 22);
+    }
   }
 }
 
