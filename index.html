@@ -3,14 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>67 Counter — Prototype</title>
+<title>67 Counter</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
-@font-face {
-  font-family: 'System';
-  src: local('-apple-system'), local('BlinkMacSystemFont'), local('Segoe UI');
-}
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -30,7 +25,6 @@ body {
   overflow: hidden;
 }
 
-/* Screens */
 .screen {
   position: absolute;
   inset: 0;
@@ -289,6 +283,7 @@ body {
   backdrop-filter: blur(10px);
   transition: all 0.3s;
   border: 1px solid rgba(255,255,255,0.2);
+  white-space: nowrap;
 }
 
 .hand-status.detected {
@@ -299,6 +294,40 @@ body {
 
 .hand-status.not-detected {
   color: rgba(255,255,255,0.5);
+}
+
+/* Motion indicator bar on the left side */
+.motion-bar {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 40%;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.1);
+  overflow: visible;
+  z-index: 20;
+}
+
+.motion-bar-fill {
+  position: absolute;
+  left: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #FAC775;
+  box-shadow: 0 0 12px #FAC775;
+  transition: top 0.08s linear;
+}
+
+.motion-bar-zone {
+  position: absolute;
+  left: -4px;
+  width: 14px;
+  height: 2px;
+  background: rgba(175, 169, 236, 0.6);
+  border-radius: 1px;
 }
 
 /* RESULTS SCREEN */
@@ -405,7 +434,6 @@ body {
   transform: scale(0.97);
 }
 
-/* Loader */
 .spinner {
   display: inline-block;
   width: 18px;
@@ -420,7 +448,6 @@ body {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Floating particles on count */
 .particle {
   position: absolute;
   pointer-events: none;
@@ -433,6 +460,21 @@ body {
 @keyframes float-up {
   0% { opacity: 1; transform: translateY(0) scale(0.5); }
   100% { opacity: 0; transform: translateY(-200px) scale(1.5); }
+}
+
+/* Flash overlay on count */
+.count-flash {
+  position: absolute;
+  inset: 0;
+  background: rgba(250, 199, 117, 0.08);
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.count-flash.active {
+  opacity: 1;
 }
 
 </style>
@@ -457,7 +499,7 @@ body {
       </div>
       <div class="how-to-row">
         <div class="step-num">2</div>
-        <span>hold both hands palms up</span>
+        <span>show your hands to the camera</span>
       </div>
       <div class="how-to-row">
         <div class="step-num">3</div>
@@ -470,6 +512,7 @@ body {
   <div id="game-screen" class="screen">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
+    <div class="count-flash" id="count-flash"></div>
     <div class="game-overlay">
       <div class="top-bar">
         <div class="timer" id="timer">0:30</div>
@@ -481,8 +524,13 @@ body {
         <div class="count-label">6 · 7</div>
       </div>
       <div class="bottom-prompt">
-        <div class="prompt-box" id="prompt">move your hands up and down</div>
+        <div class="prompt-box" id="prompt">show hands & move up/down</div>
       </div>
+    </div>
+    <!-- Motion indicator -->
+    <div class="motion-bar" id="motion-bar">
+      <div class="motion-bar-zone" id="bar-baseline" style="top:50%"></div>
+      <div class="motion-bar-fill" id="bar-dot" style="top:50%"></div>
     </div>
   </div>
 
@@ -504,7 +552,7 @@ body {
         <span class="stat-label">rank</span>
         <span class="stat-value" id="rank">rookie</span>
       </div>
-      <div id="new-best" style="display:none;" class="best-badge">★ NEW BEST</div>
+      <div id="new-best" style="display:none;" class="best-badge">NEW BEST</div>
     </div>
     <div class="results-buttons">
       <button class="btn-primary" onclick="startGame()">PLAY AGAIN</button>
@@ -531,20 +579,138 @@ let gameState = {
   stream: null,
 };
 
-let tracker = {
-  lastY: null,
-  direction: null,
+// ─── NEW MOTION TRACKING ENGINE ───
+// Uses a ring buffer + zone-based state machine instead of frame deltas
+const BUFFER_SIZE = 6;
+const REVERSAL_THRESHOLD = 0.02; // 2% of screen = ~10px on 480p — very sensitive
+const MIN_CYCLE_MS = 100;
+
+let motion = {
+  yBuffer: [],
+  state: 'idle',    // idle | went_up | went_down
+  baselineY: null,
+  peakY: null,       // best Y while going up (lowest value)
+  valleyY: null,     // best Y while going down (highest value)
   lastCountTime: 0,
-  extremeY: null,
-  smoothY: null,
-  noHandFrames: 0,
+  smoothY: 0,
+  frameCount: 0,
+  handsLostFrames: 0,
 };
 
-const MIN_AMPLITUDE = 0.04;
-const MIN_CYCLE_MS = 150;
-const SMOOTH_FACTOR = 0.4;
-const DIR_THRESHOLD = 0.005;
+function resetMotion() {
+  motion = {
+    yBuffer: [],
+    state: 'idle',
+    baselineY: null,
+    peakY: null,
+    valleyY: null,
+    lastCountTime: 0,
+    smoothY: 0,
+    frameCount: 0,
+    handsLostFrames: 0,
+  };
+}
 
+function getBufferAvg() {
+  if (motion.yBuffer.length === 0) return null;
+  return motion.yBuffer.reduce((a, b) => a + b) / motion.yBuffer.length;
+}
+
+function trackMotion(rawY) {
+  // Ring buffer for smoothing
+  motion.yBuffer.push(rawY);
+  if (motion.yBuffer.length > BUFFER_SIZE) motion.yBuffer.shift();
+  if (motion.yBuffer.length < 2) return;
+
+  const y = getBufferAvg();
+  motion.smoothY = y;
+  motion.frameCount++;
+
+  // Initialize baseline from first few frames
+  if (motion.baselineY === null) {
+    motion.baselineY = y;
+    motion.peakY = y;
+    motion.valleyY = y;
+    return;
+  }
+
+  // Slowly adapt baseline toward current position
+  motion.baselineY = motion.baselineY * 0.997 + y * 0.003;
+
+  const now = performance.now();
+  const elapsed = now - motion.lastCountTime;
+
+  // In normalized coords: Y decreases = hands go UP, Y increases = hands go DOWN
+  switch (motion.state) {
+    case 'idle':
+      // Wait for any significant movement from baseline
+      if (y < motion.baselineY - REVERSAL_THRESHOLD) {
+        motion.state = 'went_up';
+        motion.peakY = y;
+      } else if (y > motion.baselineY + REVERSAL_THRESHOLD) {
+        motion.state = 'went_down';
+        motion.valleyY = y;
+      }
+      break;
+
+    case 'went_up':
+      // Track the peak (minimum Y = highest position)
+      if (y < motion.peakY) motion.peakY = y;
+      // Did we reverse downward enough from the peak?
+      if (y > motion.peakY + REVERSAL_THRESHOLD && elapsed >= MIN_CYCLE_MS) {
+        countUp();
+        motion.lastCountTime = now;
+        motion.state = 'went_down';
+        motion.valleyY = y;
+      }
+      break;
+
+    case 'went_down':
+      // Track the valley (maximum Y = lowest position)
+      if (y > motion.valleyY) motion.valleyY = y;
+      // Did we reverse upward enough from the valley?
+      if (y < motion.valleyY - REVERSAL_THRESHOLD && elapsed >= MIN_CYCLE_MS) {
+        countUp();
+        motion.lastCountTime = now;
+        motion.state = 'went_up';
+        motion.peakY = y;
+      }
+      break;
+  }
+
+  // Update motion bar UI
+  updateMotionBar(y);
+}
+
+function updateMotionBar(y) {
+  const dot = document.getElementById('bar-dot');
+  const baseline = document.getElementById('bar-baseline');
+  if (!dot || !baseline) return;
+
+  // Map Y (0..1) to bar position (0%..100%)
+  // Clamp to reasonable range around the baseline
+  const range = 0.3;
+  const base = motion.baselineY || 0.5;
+  const normalized = ((y - base) / range + 0.5);
+  const pct = Math.max(0, Math.min(1, normalized)) * 100;
+  dot.style.top = pct + '%';
+
+  // Color the dot based on state
+  if (motion.state === 'went_up') {
+    dot.style.background = '#5DCAA5';
+    dot.style.boxShadow = '0 0 12px #5DCAA5';
+  } else if (motion.state === 'went_down') {
+    dot.style.background = '#F0997B';
+    dot.style.boxShadow = '0 0 12px #F0997B';
+  } else {
+    dot.style.background = '#FAC775';
+    dot.style.boxShadow = '0 0 12px #FAC775';
+  }
+
+  baseline.style.top = '50%';
+}
+
+// ─── MODEL LOADING ───
 async function loadModel() {
   const status = document.getElementById('status');
   status.innerHTML = '<span class="spinner"></span>loading ai model...';
@@ -552,7 +718,7 @@ async function loadModel() {
     const vision = await FilesetResolver.forVisionTasks(
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
     );
-    // Try GPU first, fallback to CPU (many mobile devices don't support GPU delegate)
+    // Try GPU first, fallback to CPU for mobile compatibility
     for (const delegate of ['GPU', 'CPU']) {
       try {
         handLandmarker = await HandLandmarker.createFromOptions(vision, {
@@ -562,11 +728,14 @@ async function loadModel() {
           },
           runningMode: 'VIDEO',
           numHands: 2,
+          minHandDetectionConfidence: 0.5,
+          minHandPresenceConfidence: 0.5,
+          minTrackingConfidence: 0.5,
         });
-        console.log('Hand model loaded with delegate:', delegate);
+        console.log('Hand model loaded with:', delegate);
         break;
       } catch (e) {
-        console.warn(`${delegate} delegate failed, trying next...`, e);
+        console.warn(delegate + ' failed:', e.message);
         if (delegate === 'CPU') throw e;
       }
     }
@@ -574,33 +743,60 @@ async function loadModel() {
     setTimeout(() => { status.textContent = ''; }, 2000);
   } catch (err) {
     status.textContent = 'model failed to load. try refreshing.';
-    console.error(err);
+    console.error('Model load error:', err);
   }
 }
 
+// ─── CAMERA ───
 async function startCamera() {
   try {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: 'user',
-        width: { ideal: isMobile ? 320 : 640 },
-        height: { ideal: isMobile ? 240 : 480 }
-      },
-      audio: false
-    });
+    // Try multiple constraint sets for maximum mobile compatibility
+    const constraintOptions = [
+      { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 } },
+      { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
+      { facingMode: 'user' },
+      true, // absolute fallback
+    ];
+
+    let stream = null;
+    for (const constraints of constraintOptions) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: constraints,
+          audio: false
+        });
+        break;
+      } catch (e) {
+        console.warn('Camera constraint failed:', constraints, e.message);
+      }
+    }
+
+    if (!stream) throw new Error('Could not access camera');
+
     video.srcObject = stream;
     gameState.stream = stream;
-    return new Promise(resolve => {
+
+    return new Promise((resolve, reject) => {
       video.onloadedmetadata = () => {
-        video.play();
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        resolve();
+        video.play().then(() => {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          console.log('Camera ready:', video.videoWidth, 'x', video.videoHeight);
+          resolve();
+        }).catch(reject);
       };
+      video.onerror = reject;
+      // Timeout fallback for mobile
+      setTimeout(() => {
+        if (video.readyState >= 2) {
+          canvas.width = video.videoWidth || 320;
+          canvas.height = video.videoHeight || 240;
+          resolve();
+        }
+      }, 3000);
     });
   } catch (err) {
-    alert('camera permission is required to play');
+    alert('Camera permission is required to play. Please allow camera access and try again.');
     throw err;
   }
 }
@@ -610,13 +806,18 @@ function stopCamera() {
     gameState.stream.getTracks().forEach(t => t.stop());
     gameState.stream = null;
   }
+  video.srcObject = null;
 }
+
+// ─── GAME FLOW ───
+let lastDetectTime = -1;
 
 window.startGame = async function() {
   if (!handLandmarker) {
     await loadModel();
     if (!handLandmarker) return;
   }
+
   showScreen('game-screen');
   await startCamera();
 
@@ -624,12 +825,13 @@ window.startGame = async function() {
   gameState.count = 0;
   gameState.timeLeft = 30;
   gameState.startTime = Date.now();
-  lastDetectTime = 0;
-  tracker = { lastY: null, direction: null, lastCountTime: 0, extremeY: null, smoothY: null, noHandFrames: 0 };
+  lastDetectTime = -1;
+  resetMotion();
 
   document.getElementById('count').textContent = '0';
   document.getElementById('timer').textContent = '0:30';
   document.getElementById('timer').classList.remove('warning');
+  document.getElementById('prompt').textContent = 'show hands & move up/down';
 
   gameState.timer = setInterval(() => {
     gameState.timeLeft--;
@@ -674,128 +876,110 @@ window.showScreen = function(id) {
   document.getElementById(id).classList.add('active');
 }
 
-let lastDetectTime = 0;
-
+// ─── DETECTION LOOP ───
 function detectLoop() {
   if (!gameState.active) return;
+
   if (video.readyState >= 2 && handLandmarker) {
     const now = performance.now();
-    // detectForVideo requires strictly increasing timestamps
-    if (now > lastDetectTime) {
+    if (now > lastDetectTime + 1) { // At least 1ms gap
       lastDetectTime = now;
       try {
-        const results = handLandmarker.detectForVideo(video, now);
+        const results = handLandmarker.detectForVideo(video, Math.round(now));
         processResults(results);
       } catch (e) {
-        console.warn('Detection frame error:', e);
+        // Silently skip bad frames
       }
     }
   }
+
   requestAnimationFrame(detectLoop);
 }
 
 function processResults(results) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const status = document.getElementById('hand-status');
+  const statusEl = document.getElementById('hand-status');
+  const promptEl = document.getElementById('prompt');
 
-  if (!results.landmarks || results.landmarks.length === 0) {
-    tracker.noHandFrames++;
-    if (tracker.noHandFrames > 10) {
-      status.textContent = 'looking for hands...';
-      status.className = 'hand-status not-detected';
-      tracker.lastY = null;
-      tracker.smoothY = null;
+  const hasHands = results.landmarks && results.landmarks.length > 0;
+
+  if (!hasHands) {
+    motion.handsLostFrames++;
+    if (motion.handsLostFrames > 15) {
+      statusEl.textContent = 'looking for hands...';
+      statusEl.className = 'hand-status not-detected';
+      promptEl.textContent = 'show your hands to the camera';
+      // Don't reset motion buffer immediately — hands might reappear
+      if (motion.handsLostFrames > 45) {
+        resetMotion();
+      }
     }
     return;
   }
 
-  tracker.noHandFrames = 0;
-  status.textContent = `${results.landmarks.length} hand${results.landmarks.length > 1 ? 's' : ''} detected`;
-  status.className = 'hand-status detected';
+  motion.handsLostFrames = 0;
+  const numHands = results.landmarks.length;
+  statusEl.textContent = numHands + (numHands > 1 ? ' hands' : ' hand') + ' detected';
+  statusEl.className = 'hand-status detected';
+
+  if (motion.frameCount > 5) {
+    promptEl.textContent = 'move hands up and down';
+  }
 
   drawHands(results.landmarks);
 
+  // Compute average Y from wrist (0) landmarks — most stable point
   let avgY = 0;
   for (const hand of results.landmarks) {
-    const wrist = hand[0];
-    const middleTip = hand[12];
-    avgY += (wrist.y + middleTip.y) / 2;
+    avgY += hand[0].y; // wrist Y
   }
-  avgY /= results.landmarks.length;
+  avgY /= numHands;
 
   trackMotion(avgY);
 }
 
-function drawHands(landmarks) {
-  ctx.strokeStyle = '#FAC775';
-  ctx.fillStyle = '#AFA9EC';
-  ctx.lineWidth = 2;
+// ─── DRAWING ───
+const HAND_CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],
+  [0,17]
+];
 
-  const connections = [
-    [0,1],[1,2],[2,3],[3,4],
-    [0,5],[5,6],[6,7],[7,8],
-    [5,9],[9,10],[10,11],[11,12],
-    [9,13],[13,14],[14,15],[15,16],
-    [13,17],[17,18],[18,19],[19,20],
-    [0,17]
-  ];
+function drawHands(landmarks) {
+  const w = canvas.width;
+  const h = canvas.height;
 
   for (const hand of landmarks) {
+    // Draw connections
+    ctx.strokeStyle = 'rgba(250, 199, 117, 0.6)';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    for (const [a, b] of connections) {
-      ctx.moveTo(hand[a].x * canvas.width, hand[a].y * canvas.height);
-      ctx.lineTo(hand[b].x * canvas.width, hand[b].y * canvas.height);
+    for (const [a, b] of HAND_CONNECTIONS) {
+      ctx.moveTo(hand[a].x * w, hand[a].y * h);
+      ctx.lineTo(hand[b].x * w, hand[b].y * h);
     }
     ctx.stroke();
 
-    for (const pt of hand) {
+    // Draw wrist landmark bigger (it's what we track)
+    ctx.fillStyle = '#FAC775';
+    ctx.beginPath();
+    ctx.arc(hand[0].x * w, hand[0].y * h, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw other landmarks smaller
+    ctx.fillStyle = 'rgba(175, 169, 236, 0.7)';
+    for (let i = 1; i < hand.length; i++) {
       ctx.beginPath();
-      ctx.arc(pt.x * canvas.width, pt.y * canvas.height, 4, 0, Math.PI * 2);
+      ctx.arc(hand[i].x * w, hand[i].y * h, 3, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 }
 
-function trackMotion(rawY) {
-  if (tracker.smoothY === null) {
-    tracker.smoothY = rawY;
-    tracker.lastY = rawY;
-    tracker.extremeY = rawY;
-    return;
-  }
-
-  // Smooth the Y value to reduce noise
-  tracker.smoothY = tracker.smoothY * (1 - SMOOTH_FACTOR) + rawY * SMOOTH_FACTOR;
-  const y = tracker.smoothY;
-
-  const dy = y - tracker.lastY;
-  const newDirection = dy > DIR_THRESHOLD ? 'down' : dy < -DIR_THRESHOLD ? 'up' : tracker.direction;
-
-  if (newDirection && newDirection !== tracker.direction) {
-    if (tracker.direction !== null) {
-      const amplitude = Math.abs(y - tracker.extremeY);
-      const now = performance.now();
-      const elapsed = now - tracker.lastCountTime;
-
-      // Count on BOTH direction changes (up→down AND down→up) = each peak and valley
-      if (amplitude >= MIN_AMPLITUDE && elapsed >= MIN_CYCLE_MS) {
-        countUp();
-        tracker.lastCountTime = now;
-      }
-    }
-    tracker.extremeY = y;
-    tracker.direction = newDirection;
-  }
-
-  // Track the extreme point in current direction
-  if ((tracker.direction === 'up' && y < tracker.extremeY) ||
-      (tracker.direction === 'down' && y > tracker.extremeY)) {
-    tracker.extremeY = y;
-  }
-
-  tracker.lastY = y;
-}
-
+// ─── COUNT ───
 function countUp() {
   gameState.count++;
   const countEl = document.getElementById('count');
@@ -803,6 +987,12 @@ function countUp() {
   countEl.classList.remove('pulse');
   void countEl.offsetWidth;
   countEl.classList.add('pulse');
+
+  // Flash effect
+  const flash = document.getElementById('count-flash');
+  flash.classList.add('active');
+  setTimeout(() => flash.classList.remove('active'), 150);
+
   spawnParticle();
 }
 
@@ -817,6 +1007,7 @@ function spawnParticle() {
   setTimeout(() => p.remove(), 1000);
 }
 
+// ─── INIT ───
 window.addEventListener('load', () => {
   loadModel();
 });
