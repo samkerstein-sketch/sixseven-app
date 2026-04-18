@@ -579,35 +579,43 @@ let gameState = {
   stream: null,
 };
 
-// ─── NEW MOTION TRACKING ENGINE ───
-// Uses a ring buffer + zone-based state machine instead of frame deltas
+// ─── MOTION TRACKING ENGINE ───
+// Absolute threshold-based: calibrate resting position, then detect
+// when hands cross above the "up line" and return below the "down line".
+//
+// State machine:
+//   down → (hands cross UP line) → ready → (hands cross DOWN line) → COUNT + back to down
+//
+// "ready" = hands are raised. Staying up does NOT count.
+// Only the transition from ready → down triggers a count.
+
 const BUFFER_SIZE = 6;
-const REVERSAL_THRESHOLD = 0.02; // 2% of screen = ~10px on 480p — very sensitive
-const MIN_CYCLE_MS = 100;
+const CALIBRATION_FRAMES = 20;
+const UP_THRESHOLD = 0.04;   // hands must rise 4% of screen above baseline to become "ready"
+const DOWN_THRESHOLD = 0.02; // hands must return within 2% of baseline to count
+const MIN_CYCLE_MS = 150;
 
 let motion = {
   yBuffer: [],
-  state: 'idle',    // idle | went_up | went_down
-  baselineY: null,
-  peakY: null,       // best Y while going up (lowest value)
-  valleyY: null,     // best Y while going down (highest value)
-  lastCountTime: 0,
+  state: 'down',       // down | ready
+  baselineY: null,      // resting Y position (calibrated from first frames)
+  calibrationSamples: [],
   smoothY: 0,
   frameCount: 0,
   handsLostFrames: 0,
+  lastCountTime: 0,
 };
 
 function resetMotion() {
   motion = {
     yBuffer: [],
-    state: 'idle',
+    state: 'down',
     baselineY: null,
-    peakY: null,
-    valleyY: null,
-    lastCountTime: 0,
+    calibrationSamples: [],
     smoothY: 0,
     frameCount: 0,
     handsLostFrames: 0,
+    lastCountTime: 0,
   };
 }
 
@@ -626,53 +634,48 @@ function trackMotion(rawY) {
   motion.smoothY = y;
   motion.frameCount++;
 
-  // Initialize baseline from first few frames
-  if (motion.baselineY === null) {
-    motion.baselineY = y;
-    motion.peakY = y;
-    motion.valleyY = y;
+  // ── Phase 1: Calibrate baseline from first N frames ──
+  if (motion.calibrationSamples.length < CALIBRATION_FRAMES) {
+    motion.calibrationSamples.push(y);
+    if (motion.calibrationSamples.length === CALIBRATION_FRAMES) {
+      motion.baselineY = motion.calibrationSamples.reduce((a, b) => a + b) / CALIBRATION_FRAMES;
+      console.log('Baseline calibrated:', motion.baselineY.toFixed(4));
+    }
     return;
   }
 
-  // Slowly adapt baseline toward current position
-  motion.baselineY = motion.baselineY * 0.997 + y * 0.003;
+  // Slowly adapt baseline when hands are in "down" state (resting)
+  if (motion.state === 'down') {
+    motion.baselineY = motion.baselineY * 0.99 + y * 0.01;
+  }
 
   const now = performance.now();
   const elapsed = now - motion.lastCountTime;
 
-  // In normalized coords: Y decreases = hands go UP, Y increases = hands go DOWN
+  // In normalized coords: lower Y = hands higher on screen
+  // So "hands up" = y < baseline - UP_THRESHOLD
+  // "hands back down" = y > baseline - DOWN_THRESHOLD (close to or below baseline)
+
   switch (motion.state) {
-    case 'idle':
-      // Wait for any significant movement from baseline
-      if (y < motion.baselineY - REVERSAL_THRESHOLD) {
-        motion.state = 'went_up';
-        motion.peakY = y;
-      } else if (y > motion.baselineY + REVERSAL_THRESHOLD) {
-        motion.state = 'went_down';
-        motion.valleyY = y;
+    case 'down':
+      // Hands are resting. Check if they crossed UP above threshold.
+      if (y < motion.baselineY - UP_THRESHOLD) {
+        motion.state = 'ready';
+        // Update prompt to show we detected the raise
+        const p = document.getElementById('prompt');
+        if (p) p.textContent = 'now bring them down!';
       }
       break;
 
-    case 'went_up':
-      // Track the peak (minimum Y = highest position)
-      if (y < motion.peakY) motion.peakY = y;
-      // Did we reverse downward enough from the peak?
-      if (y > motion.peakY + REVERSAL_THRESHOLD) {
-        motion.state = 'went_down';
-        motion.valleyY = y;
-      }
-      break;
-
-    case 'went_down':
-      // Track the valley (maximum Y = lowest position)
-      if (y > motion.valleyY) motion.valleyY = y;
-      // Did we reverse upward enough from the valley?
-      // Full cycle complete (up then down) — count!
-      if (y < motion.valleyY - REVERSAL_THRESHOLD && elapsed >= MIN_CYCLE_MS) {
+    case 'ready':
+      // Hands are raised ("ready"). Wait for them to come back DOWN.
+      // Count ONLY when hands return near/below baseline.
+      if (y > motion.baselineY - DOWN_THRESHOLD && elapsed >= MIN_CYCLE_MS) {
         countUp();
         motion.lastCountTime = now;
-        motion.state = 'went_up';
-        motion.peakY = y;
+        motion.state = 'down';
+        const p = document.getElementById('prompt');
+        if (p) p.textContent = 'raise your hands!';
       }
       break;
   }
@@ -694,13 +697,10 @@ function updateMotionBar(y) {
   const pct = Math.max(0, Math.min(1, normalized)) * 100;
   dot.style.top = pct + '%';
 
-  // Color the dot based on state
-  if (motion.state === 'went_up') {
+  // Color the dot based on state: green = ready (hands up), gold = down (resting)
+  if (motion.state === 'ready') {
     dot.style.background = '#5DCAA5';
     dot.style.boxShadow = '0 0 12px #5DCAA5';
-  } else if (motion.state === 'went_down') {
-    dot.style.background = '#F0997B';
-    dot.style.boxShadow = '0 0 12px #F0997B';
   } else {
     dot.style.background = '#FAC775';
     dot.style.boxShadow = '0 0 12px #FAC775';
@@ -921,8 +921,10 @@ function processResults(results) {
   statusEl.textContent = numHands + (numHands > 1 ? ' hands' : ' hand') + ' detected';
   statusEl.className = 'hand-status detected';
 
-  if (motion.frameCount > 5) {
-    promptEl.textContent = 'move hands up and down';
+  if (motion.calibrationSamples.length < CALIBRATION_FRAMES) {
+    promptEl.textContent = 'hold still — calibrating...';
+  } else if (motion.frameCount <= CALIBRATION_FRAMES + 5) {
+    promptEl.textContent = 'raise your hands!';
   }
 
   drawHands(results.landmarks);
