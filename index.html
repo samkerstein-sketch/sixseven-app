@@ -329,7 +329,7 @@ body {
     <div class="how-to">
       <div class="how-to-row"><div class="step-num">1</div><span>allow camera — stand so your upper body is visible</span></div>
       <div class="how-to-row"><div class="step-num">2</div><span>raise one hand up, then drop it</span></div>
-      <div class="how-to-row"><div class="step-num">3</div><span>now do the other hand within 3 sec — that's a 6-7!</span></div>
+      <div class="how-to-row"><div class="step-num">3</div><span>now do the other hand within 2 sec — that's a 6-7!</span></div>
     </div>
   </div>
 
@@ -351,7 +351,7 @@ body {
         <div class="hand-badge" id="badge-right">R</div>
         <div class="hand-badge" id="badge-left">L</div>
       </div>
-      <div class="phase-timer" id="phase-timer">3.0s</div>
+      <div class="phase-timer" id="phase-timer">2.0s</div>
       <div class="streak-badge" id="streak-badge">STREAK</div>
       <div class="center-display">
         <div class="count-display" id="count">0</div>
@@ -422,15 +422,15 @@ let gameState = {
 
 const ARM_CONFIRM  = 2;   // frames to confirm hand is raised
 const FIRE_CONFIRM = 1;   // 1 frame for rapid drop
-const MIN_CYCLE_MS = 60;  // min time between counts
-const PHASE_B_TIMEOUT = 3000; // 3 seconds to complete phase B
+const MIN_CYCLE_MS = 50;  // very fast cycles
+const PHASE_B_TIMEOUT = 2000; // 2 seconds to complete opposite hand
 
 // Thresholds as fractions of bodyUnit (nose→shoulder distance)
-const ARM_ZONE  = -0.10;  // arm line at eye level (below forehead)
-const DROP_ZONE = 0.90;   // drop line at shoulder level
+const ARM_ZONE  = -0.05;  // arm line at ~eye/forehead level
+const DROP_ZONE = 0.35;   // drop line just below nose — quick snap is enough
 
 // Low-pass filter
-const WRIST_SMOOTH = 0.30;
+const WRIST_SMOOTH = 0.20; // light smoothing — prioritize responsiveness
 let smoothLWristY = null;
 let smoothRWristY = null;
 
@@ -520,8 +520,9 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
 
   // Thresholds
   const foreheadY    = (eyeY + noseY) / 2;
-  const armThreshold = foreheadY - bodyUnit * ARM_ZONE; // eye level
-  const dropThreshold = shoulderY + bodyUnit * (DROP_ZONE - 1); // at shoulder level
+  const armThreshold = foreheadY - bodyUnit * ARM_ZONE; // eye/forehead level
+  // Drop line: between nose and shoulders (DROP_ZONE=0.35 → 35% down from nose to shoulders)
+  const dropThreshold = noseY + bodyUnit * DROP_ZONE;
 
   // Smooth wrist Y
   smoothLWristY = lowPass(smoothLWristY, lWrist.y, WRIST_SMOOTH);
