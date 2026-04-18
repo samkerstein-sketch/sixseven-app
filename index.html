@@ -657,9 +657,7 @@ function trackMotion(rawY) {
       // Track the peak (minimum Y = highest position)
       if (y < motion.peakY) motion.peakY = y;
       // Did we reverse downward enough from the peak?
-      if (y > motion.peakY + REVERSAL_THRESHOLD && elapsed >= MIN_CYCLE_MS) {
-        countUp();
-        motion.lastCountTime = now;
+      if (y > motion.peakY + REVERSAL_THRESHOLD) {
         motion.state = 'went_down';
         motion.valleyY = y;
       }
@@ -669,6 +667,7 @@ function trackMotion(rawY) {
       // Track the valley (maximum Y = lowest position)
       if (y > motion.valleyY) motion.valleyY = y;
       // Did we reverse upward enough from the valley?
+      // Full cycle complete (up then down) — count!
       if (y < motion.valleyY - REVERSAL_THRESHOLD && elapsed >= MIN_CYCLE_MS) {
         countUp();
         motion.lastCountTime = now;
