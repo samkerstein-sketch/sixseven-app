@@ -252,6 +252,39 @@ body {
   50% { transform: scale(1.1); box-shadow: 0 0 25px rgba(250,199,117,0.6); }
 }
 
+/* ── PRIMED EDGE GLOW (screen-edge indicator when Phase A hand is done) ── */
+.primed-glow {
+  position: absolute; top: 0; bottom: 0; width: 8px;
+  pointer-events: none; z-index: 4; opacity: 0;
+  transition: opacity 0.3s;
+}
+.primed-glow.left  { left: 0; }
+.primed-glow.right { right: 0; }
+.primed-glow.active {
+  opacity: 1;
+  animation: primed-edge 1s ease-in-out infinite;
+}
+.primed-glow.left.active {
+  background: linear-gradient(90deg, rgba(93,202,165,0.7), transparent);
+  box-shadow: 0 0 30px rgba(93,202,165,0.5), 0 0 60px rgba(93,202,165,0.2);
+}
+.primed-glow.right.active {
+  background: linear-gradient(-90deg, rgba(93,202,165,0.7), transparent);
+  box-shadow: 0 0 30px rgba(93,202,165,0.5), 0 0 60px rgba(93,202,165,0.2);
+}
+@keyframes primed-edge {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+/* Primed checkmark badge */
+.hand-badge.done::after {
+  content: '✓'; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 900;
+}
+.hand-badge.done { font-size: 0; position: relative; }
+
 /* Phase B countdown ring */
 .phase-timer {
   position: absolute; top: 145px; left: 50%; transform: translateX(-50%);
@@ -420,6 +453,8 @@ body {
     <canvas id="canvas"></canvas>
     <canvas id="vfx-canvas"></canvas>
     <div class="fire-border" id="fire-border"></div>
+    <div class="primed-glow left" id="primed-left"></div>
+    <div class="primed-glow right" id="primed-right"></div>
     <div class="countdown-overlay" id="countdown-overlay">
       <div class="countdown-num" id="countdown-num">3</div>
       <div class="countdown-label">get ready</div>
@@ -504,35 +539,43 @@ window.selectDuration = function(secs) {
 }
 
 // ═══════════════════════════════════════
-//  STATE MACHINE — ALTERNATING HANDS
+//  STATE MACHINE — ACTION ZONE + VELOCITY
 // ═══════════════════════════════════════
 //
-//  Each hand is tracked independently through its own
-//  raise→drop micro-cycle. A full "6-7" count requires:
+//  ACTION ZONE defined by two lines:
+//    RAISE line : chin/mouth level (noseY + 15% bodyUnit)
+//    DROP line  : mid-chest level (shoulderY + 40% bodyUnit)
 //
-//  Phase A: ONE hand raises above eye level then drops
-//           below shoulder level → "half-way" feedback.
-//  Phase B: The OPPOSITE hand must do the same within 3s.
-//           Success → COUNT++, full VFX explosion, reset.
-//           Same hand again → ignored.
-//           3s timeout → reset to Phase A.
+//  Only movements WITHIN this zone count. Hands above
+//  the raise line or below the drop line are ignored.
 //
-//  Thresholds are body-proportional (nose→shoulder distance).
+//  Detection uses BOTH position AND velocity:
+//  - Position: wrist crosses from above raise → below drop
+//  - Velocity: rapid downward snap (>threshold) insta-fires
+//
+//  Alternating hands: Phase A → Phase B → count.
 // ═══════════════════════════════════════
 
-const ARM_CONFIRM  = 2;   // frames to confirm hand is raised
-const FIRE_CONFIRM = 1;   // 1 frame for rapid drop
-const MIN_CYCLE_MS = 50;  // very fast cycles
-const PHASE_B_TIMEOUT = 2000; // 2 seconds to complete opposite hand
+const ARM_CONFIRM  = 2;    // frames to confirm raise
+const FIRE_CONFIRM = 1;    // 1 frame for position-based drop
+const MIN_CYCLE_MS = 50;
+const PHASE_B_TIMEOUT = 2000;
 
-// Thresholds as fractions of bodyUnit (nose→shoulder distance)
-const ARM_ZONE  = -0.05;  // arm line at ~eye/forehead level
-const DROP_ZONE = 0.35;   // drop line just below nose — quick snap is enough
+// Action Zone thresholds (fractions of bodyUnit = shoulderY - noseY)
+// RAISE line: noseY + bodyUnit * RAISE_ZONE → chin/mouth area
+const RAISE_ZONE = 0.15;
+// DROP line: shoulderY + bodyUnit * DROP_ZONE → mid-chest below shoulders
+const DROP_ZONE  = 0.40;
+
+// Velocity snap threshold (normalized Y units per frame, positive = downward)
+const SNAP_VELOCITY = 0.006;
 
 // Low-pass filter
-const WRIST_SMOOTH = 0.20; // light smoothing — prioritize responsiveness
+const WRIST_SMOOTH = 0.25;
 let smoothLWristY = null;
 let smoothRWristY = null;
+let prevSmoothLY = null;
+let prevSmoothRY = null;
 
 // Per-hand state: 'idle' → 'raised' → 'dropped'
 let leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
@@ -540,9 +583,9 @@ let rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
 
 // Sequence state
 let sm = {
-  phase: 'A',           // 'A' = waiting for first hand, 'B' = waiting for opposite
-  completedHand: null,   // 'left' or 'right' — which hand finished phase A
-  phaseBStart: 0,        // timestamp when phase B started
+  phase: 'A',
+  completedHand: null,
+  phaseBStart: 0,
   lastCountTime: 0,
   lostFrames: 0,
   _armLineY: 0,
@@ -556,9 +599,10 @@ function resetSM() {
     phase: 'A', completedHand: null, phaseBStart: 0,
     lastCountTime: 0, lostFrames: 0, _armLineY: 0, _fireLineY: 0,
   };
-  smoothLWristY = null;
-  smoothRWristY = null;
+  smoothLWristY = null; smoothRWristY = null;
+  prevSmoothLY = null; prevSmoothRY = null;
   updateHandBadges();
+  updatePrimedGlow(null);
   document.getElementById('phase-timer').classList.remove('visible');
 }
 
@@ -568,13 +612,15 @@ function lowPass(prev, raw, alpha) {
 }
 
 /**
- * Check a single hand's raise→drop micro-cycle.
- * Returns true if this hand just completed a full raise+drop.
+ * Process a single hand's raise→drop cycle.
+ * Uses position + velocity for snap detection.
+ * @param velocity - positive = moving downward
  */
-function processHand(hand, smoothY, armThreshold, dropThreshold) {
+function processHand(hand, smoothY, velocity, raiseThreshold, dropThreshold) {
   switch (hand.state) {
     case 'idle':
-      if (smoothY < armThreshold) {
+      // Hand must be above the raise line (inside the action zone top)
+      if (smoothY < raiseThreshold) {
         hand.raisedFrames++;
         if (hand.raisedFrames >= ARM_CONFIRM) {
           hand.state = 'raised';
@@ -586,14 +632,20 @@ function processHand(hand, smoothY, armThreshold, dropThreshold) {
       return false;
 
     case 'raised':
-      // Still above arm line? Stay raised
-      if (smoothY < armThreshold) { hand.dropFrames = 0; return false; }
-      // Check for drop below shoulder level
-      if (smoothY > dropThreshold) {
+      // Still above raise line? Stay raised
+      if (smoothY < raiseThreshold) { hand.dropFrames = 0; return false; }
+
+      // Two ways to detect the drop:
+      // 1. Position-based: wrist crossed below the drop line
+      const positionDrop = smoothY > dropThreshold;
+      // 2. Velocity-based: fast downward snap while between raise & drop lines
+      const velocitySnap = velocity > SNAP_VELOCITY;
+
+      if (positionDrop || velocitySnap) {
         hand.dropFrames++;
         if (hand.dropFrames >= FIRE_CONFIRM) {
           hand.state = 'dropped';
-          return true; // completed raise→drop!
+          return true;
         }
       } else {
         hand.dropFrames = 0;
@@ -601,64 +653,65 @@ function processHand(hand, smoothY, armThreshold, dropThreshold) {
       return false;
 
     case 'dropped':
-      // Already completed — stays dropped until sequence resets this hand
       return false;
   }
   return false;
 }
 
 /**
- * Core alternating-hand 6-7 detection.
- * Returns true when a full count is completed.
+ * Core alternating-hand 6-7 detection with Action Zone.
  */
 function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
   const shoulderY = (lShoulder.y + rShoulder.y) / 2;
   const noseY     = nose.y;
-  const eyeY      = (lEye.y + rEye.y) / 2;
   const bodyUnit  = shoulderY - noseY;
   if (bodyUnit < 0.01) return false;
 
-  // Thresholds
-  const foreheadY    = (eyeY + noseY) / 2;
-  const armThreshold = foreheadY - bodyUnit * ARM_ZONE; // eye/forehead level
-  // Drop line: between nose and shoulders (DROP_ZONE=0.35 → 35% down from nose to shoulders)
-  const dropThreshold = noseY + bodyUnit * DROP_ZONE;
+  // ── ACTION ZONE lines (body-proportional) ──
+  // Raise line: chin/mouth area
+  const raiseThreshold = noseY + bodyUnit * RAISE_ZONE;
+  // Drop line: mid-chest, below shoulders
+  const dropThreshold  = shoulderY + bodyUnit * DROP_ZONE;
 
-  // Smooth wrist Y
+  // ── Smooth wrist Y + velocity ──
+  prevSmoothLY = smoothLWristY;
+  prevSmoothRY = smoothRWristY;
   smoothLWristY = lowPass(smoothLWristY, lWrist.y, WRIST_SMOOTH);
   smoothRWristY = lowPass(smoothRWristY, rWrist.y, WRIST_SMOOTH);
 
+  const velL = prevSmoothLY !== null ? smoothLWristY - prevSmoothLY : 0;
+  const velR = prevSmoothRY !== null ? smoothRWristY - prevSmoothRY : 0;
+
   // Store for drawing
-  sm._armLineY  = armThreshold;
+  sm._armLineY  = raiseThreshold;
   sm._fireLineY = dropThreshold;
 
   const now = performance.now();
 
-  // Check phase B timeout
+  // Phase B timeout
   if (sm.phase === 'B' && (now - sm.phaseBStart) > PHASE_B_TIMEOUT) {
-    // Timeout — reset to phase A
     sm.phase = 'A';
     sm.completedHand = null;
     leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
     rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
     setPrompt('idle');
     updateHandBadges();
+    updatePrimedGlow(null);
     document.getElementById('phase-timer').classList.remove('visible');
     return false;
   }
 
-  // Process each hand independently
-  const leftDone  = processHand(leftHand,  smoothLWristY, armThreshold, dropThreshold);
-  const rightDone = processHand(rightHand, smoothRWristY, armThreshold, dropThreshold);
+  // Process each hand with velocity
+  const leftDone  = processHand(leftHand,  smoothLWristY, velL, raiseThreshold, dropThreshold);
+  const rightDone = processHand(rightHand, smoothRWristY, velR, raiseThreshold, dropThreshold);
 
-  // Phase A: waiting for first hand to complete
+  // Phase A: waiting for first hand
   if (sm.phase === 'A') {
     if (leftDone || rightDone) {
       const which = leftDone ? 'left' : 'right';
       sm.phase = 'B';
       sm.completedHand = which;
       sm.phaseBStart = now;
-      // Reset only the opposite hand for phase B
       const opposite = which === 'left' ? rightHand : leftHand;
       opposite.state = 'idle';
       opposite.raisedFrames = 0;
@@ -666,9 +719,9 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
       setPrompt('half', which);
       triggerHalfwayVFX(which);
       updateHandBadges();
+      updatePrimedGlow(which);
       document.getElementById('phase-timer').classList.add('visible');
     } else {
-      // Show "raised" feedback per hand
       if (leftHand.state === 'raised' || rightHand.state === 'raised') {
         setPrompt('raising');
       }
@@ -677,28 +730,26 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
     return false;
   }
 
-  // Phase B: waiting for the OPPOSITE hand
+  // Phase B: waiting for opposite hand
   if (sm.phase === 'B') {
     const neededHand = sm.completedHand === 'left' ? 'right' : 'left';
     const neededDone = neededHand === 'left' ? leftDone : rightDone;
 
-    // Update phase timer display
     const remaining = Math.max(0, PHASE_B_TIMEOUT - (now - sm.phaseBStart)) / 1000;
     document.getElementById('phase-timer').textContent = remaining.toFixed(1) + 's';
 
     if (neededDone && (now - sm.lastCountTime) >= MIN_CYCLE_MS) {
-      // SUCCESS — full 6-7!
       sm.lastCountTime = now;
       sm.phase = 'A';
       sm.completedHand = null;
       leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
       rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
       updateHandBadges();
+      updatePrimedGlow(null);
       document.getElementById('phase-timer').classList.remove('visible');
       return true; // COUNT!
     }
 
-    // Show raising feedback for the needed hand
     const neededHandObj = neededHand === 'left' ? leftHand : rightHand;
     if (neededHandObj.state === 'raised') {
       setPrompt('almostB', neededHand);
@@ -709,6 +760,12 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
   }
 
   return false;
+}
+
+// ── Primed edge glow ──
+function updatePrimedGlow(hand) {
+  document.getElementById('primed-left').classList.toggle('active', hand === 'left');
+  document.getElementById('primed-right').classList.toggle('active', hand === 'right');
 }
 
 // ── Hand badge UI updates ──
@@ -1708,6 +1765,7 @@ window.endGame = function() {
   gameState.active = false;
   clearInterval(gameState.timer);
   stopBGM(); stopChargeSFX();
+  updatePrimedGlow(null);
 
   const count = gameState.count;
   const dur = gameState.duration || 30;
@@ -1808,24 +1866,32 @@ function processResults(results) {
 function drawPose(pose, nose, lSh, rSh, lWr, rWr) {
   const w = canvas.width, h = canvas.height;
 
-  const armLinePixel  = (sm._armLineY  || nose.y) * h;
-  const fireLinePixel = (sm._fireLineY || ((lSh.y + rSh.y) / 2)) * h;
+  const raiseLineY = (sm._armLineY  || nose.y) * h;
+  const dropLineY  = (sm._fireLineY || ((lSh.y + rSh.y) / 2)) * h;
 
   const anyRaised = leftHand.state === 'raised' || rightHand.state === 'raised';
+  const inPhaseB  = sm.phase === 'B';
 
-  // Threshold lines
-  ctx.setLineDash([8, 6]);
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = anyRaised ? 'rgba(93,202,165,0.8)' : 'rgba(175,169,236,0.4)';
-  ctx.beginPath(); ctx.moveTo(0, armLinePixel); ctx.lineTo(w, armLinePixel); ctx.stroke();
-  ctx.strokeStyle = anyRaised ? 'rgba(250,199,117,0.6)' : 'rgba(250,199,117,0.25)';
-  ctx.beginPath(); ctx.moveTo(0, fireLinePixel); ctx.lineTo(w, fireLinePixel); ctx.stroke();
+  // Action zone fill (subtle tint between the two lines)
+  ctx.fillStyle = anyRaised || inPhaseB
+    ? 'rgba(93,202,165,0.06)' : 'rgba(175,169,236,0.04)';
+  ctx.fillRect(0, raiseLineY, w, dropLineY - raiseLineY);
+
+  // Action zone lines — thick and visible
+  ctx.setLineDash([10, 6]);
+  ctx.lineWidth = 3;
+  // RAISE line (upper)
+  ctx.strokeStyle = anyRaised ? 'rgba(93,202,165,0.9)' : 'rgba(100,180,255,0.5)';
+  ctx.beginPath(); ctx.moveTo(0, raiseLineY); ctx.lineTo(w, raiseLineY); ctx.stroke();
+  // DROP line (lower)
+  ctx.strokeStyle = anyRaised ? 'rgba(250,199,117,0.8)' : 'rgba(100,180,255,0.5)';
+  ctx.beginPath(); ctx.moveTo(0, dropLineY); ctx.lineTo(w, dropLineY); ctx.stroke();
   ctx.setLineDash([]);
 
   // Labels
-  ctx.font = '10px -apple-system, sans-serif';
-  ctx.fillStyle = 'rgba(175,169,236,0.6)'; ctx.fillText('RAISE', 6, armLinePixel - 4);
-  ctx.fillStyle = 'rgba(250,199,117,0.5)'; ctx.fillText('DROP', 6, fireLinePixel - 4);
+  ctx.font = 'bold 11px -apple-system, sans-serif';
+  ctx.fillStyle = 'rgba(100,180,255,0.7)'; ctx.fillText('▲ RAISE', 6, raiseLineY - 6);
+  ctx.fillStyle = 'rgba(100,180,255,0.7)'; ctx.fillText('▼ DROP', 6, dropLineY + 14);
 
   // Arm skeleton lines
   ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 2;
