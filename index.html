@@ -79,7 +79,7 @@ body {
 }
 .top-bar { display: flex; justify-content: space-between; align-items: center; }
 .timer {
-  position: absolute; left: 50%; transform: translateX(-50%);
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
   background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
   padding: 10px 20px; border-radius: 30px; font-size: 20px;
   font-weight: 800; color: #FAC775; border: 2px solid rgba(250,199,117,0.4);
@@ -87,7 +87,7 @@ body {
   z-index: 15;
 }
 .timer.warning { color: #F0997B; border-color: rgba(240,153,123,0.6); animation: pulse-warn 0.5s ease-in-out infinite; }
-@keyframes pulse-warn { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+@keyframes pulse-warn { 0%, 100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.05); } }
 
 .close-btn, .mute-btn {
   width: 44px; height: 44px; border-radius: 50%;
@@ -573,9 +573,7 @@ const DROP_ZONE  = 0.40;
 // Velocity snap threshold (normalized Y units per frame, positive = downward)
 const SNAP_VELOCITY = 0.006;
 
-// ── EXCLUSIVITY: both-hand simultaneous rejection ──
-const SIMUL_WINDOW_MS = 200; // if both hands raise within 200ms → reject
-let bothUpCooldown = false;  // when true, both must return below drop line
+/// ── Alternating hand detection ──
 
 // Low-pass filter
 const WRIST_SMOOTH = 0.25;
@@ -608,7 +606,6 @@ function resetSM() {
   };
   smoothLWristY = null; smoothRWristY = null;
   prevSmoothLY = null; prevSmoothRY = null;
-  bothUpCooldown = false;
   updateHandBadges();
   updatePrimedGlow(null);
   document.getElementById('phase-timer').classList.remove('visible');
@@ -628,12 +625,6 @@ function processHand(hand, smoothY, velocity, raiseThreshold, dropThreshold, oth
   switch (hand.state) {
     case 'idle':
       if (smoothY < raiseThreshold) {
-        // EXCLUSIVITY CHECK: only allow raise if the other hand is NOT also above the raise line
-        if (otherHandAbove) {
-          // Both hands up simultaneously → block
-          hand.raisedFrames = 0;
-          return false;
-        }
         hand.raisedFrames++;
         if (hand.raisedFrames >= ARM_CONFIRM) {
           hand.state = 'raised';
@@ -695,41 +686,6 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
 
   const now = performance.now();
 
-  // ── RAW position checks (before hand processing) ──
-  const leftAboveRaise  = smoothLWristY < raiseThreshold;
-  const rightAboveRaise = smoothRWristY < raiseThreshold;
-  const leftBelowDrop   = smoothLWristY > dropThreshold;
-  const rightBelowDrop  = smoothRWristY > dropThreshold;
-
-  // ── BOTH-HANDS-UP COOLDOWN ──
-  // If both hands are above raise line simultaneously, enter cooldown.
-  // Both must return below drop line before any new attempt.
-  if (leftAboveRaise && rightAboveRaise) {
-    if (!bothUpCooldown) {
-      // Just detected both hands up — invalidate any in-progress state
-      bothUpCooldown = true;
-      leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
-      rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
-      if (sm.phase === 'A') {
-        setPrompt('idle');
-      }
-      // Don't reset phase B if already in it — let timeout handle that
-    }
-    updateHandBadges();
-    return false;
-  }
-
-  // Exit cooldown only when BOTH hands are below the drop line
-  if (bothUpCooldown) {
-    if (leftBelowDrop && rightBelowDrop) {
-      bothUpCooldown = false;
-    } else {
-      // Still in cooldown — don't process anything
-      updateHandBadges();
-      return false;
-    }
-  }
-
   // ── Phase B timeout ──
   if (sm.phase === 'B' && (now - sm.phaseBStart) > PHASE_B_TIMEOUT) {
     sm.phase = 'A';
@@ -743,34 +699,12 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
     return false;
   }
 
-  // ── Process each hand (pass whether OTHER hand is above raise line) ──
-  const leftDone  = processHand(leftHand,  smoothLWristY, velL, raiseThreshold, dropThreshold, rightAboveRaise, now);
-  const rightDone = processHand(rightHand, smoothRWristY, velR, raiseThreshold, dropThreshold, leftAboveRaise, now);
+  // ── Process each hand ──
+  const leftDone  = processHand(leftHand,  smoothLWristY, velL, raiseThreshold, dropThreshold, false, now);
+  const rightDone = processHand(rightHand, smoothRWristY, velR, raiseThreshold, dropThreshold, false, now);
 
-  // ── SIMULTANEOUS COMPLETION CHECK ──
-  // If both hands completed their raise→drop within 200ms of each other, reject both
-  if (leftDone && rightDone) {
-    leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
-    rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
-    bothUpCooldown = true; // force both down before retry
-    updateHandBadges();
-    return false;
-  }
-
-  // If one hand just completed but the other also raised within SIMUL_WINDOW_MS, reject
-  if (leftDone || rightDone) {
-    const doneHand = leftDone ? leftHand : rightHand;
-    const otherHand = leftDone ? rightHand : leftHand;
-    if (otherHand.state === 'raised' && otherHand.raisedAt > 0 &&
-        (now - otherHand.raisedAt) < SIMUL_WINDOW_MS) {
-      // Both raised nearly simultaneously — reject
-      leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
-      rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
-      bothUpCooldown = true;
-      updateHandBadges();
-      return false;
-    }
-  }
+  // ── If both hands completed simultaneously, only count the first one ──
+  // (Phase A/B logic below already handles alternation — no need to reject)
 
   // ── Phase A: waiting for first hand ──
   if (sm.phase === 'A') {
@@ -1960,12 +1894,6 @@ function drawPose(pose, nose, lSh, rSh, lWr, rWr) {
   ctx.font = 'bold 11px -apple-system, sans-serif';
   ctx.fillStyle = 'rgba(100,180,255,0.7)'; ctx.fillText('▲ RAISE', 6, raiseLineY - 6);
   ctx.fillStyle = 'rgba(100,180,255,0.7)'; ctx.fillText('▼ DROP', 6, dropLineY + 14);
-
-  // Position the game timer at the vertical midpoint of the action zone
-  const zoneMidY = (raiseLineY + dropLineY) / 2;
-  // Convert canvas Y to screen Y (canvas may be scaled vs viewport)
-  const screenMidY = zoneMidY * (window.innerHeight / canvas.height);
-  document.getElementById('timer').style.top = screenMidY + 'px';
 
   // Arm skeleton lines
   ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 2;
