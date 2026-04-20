@@ -315,6 +315,83 @@ body {
 .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #AFA9EC; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── DURATION SELECTOR ── */
+.duration-selector {
+  display: flex; gap: 10px; margin-bottom: 24px; justify-content: center;
+}
+.dur-btn {
+  padding: 12px 20px; border-radius: 24px; border: 2px solid rgba(175,169,236,0.3);
+  background: rgba(175,169,236,0.08); color: #AFA9EC; font-size: 15px;
+  font-weight: 700; cursor: pointer; transition: all 0.2s; min-width: 70px;
+}
+.dur-btn:active { transform: scale(0.95); }
+.dur-btn.selected {
+  border-color: #FAC775; background: rgba(250,199,117,0.2); color: #FAC775;
+  box-shadow: 0 0 20px rgba(250,199,117,0.25);
+}
+
+/* ── PRE-GAME COUNTDOWN OVERLAY ── */
+.countdown-overlay {
+  position: absolute; inset: 0; z-index: 50;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+  opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+.countdown-overlay.active { opacity: 1; pointer-events: auto; }
+.countdown-num {
+  font-size: clamp(120px, 35vw, 240px); font-weight: 900;
+  color: #FAC775; line-height: 1; letter-spacing: -8px;
+  text-shadow: 0 0 80px rgba(250,199,117,0.6), 0 0 160px rgba(175,169,236,0.3);
+}
+.countdown-num.pulse {
+  animation: cd-pulse 0.7s ease-out;
+}
+.countdown-num.go {
+  animation: cd-go 0.6s ease-out;
+  color: #5DCAA5;
+  text-shadow: 0 0 80px rgba(93,202,165,0.8), 0 0 160px rgba(93,202,165,0.4);
+}
+@keyframes cd-pulse {
+  0% { transform: scale(0.3); opacity: 0; filter: brightness(3); }
+  30% { transform: scale(1.3); opacity: 1; filter: brightness(2); }
+  60% { transform: scale(0.95); filter: brightness(1.2); }
+  100% { transform: scale(1); opacity: 1; filter: brightness(1); }
+}
+@keyframes cd-go {
+  0% { transform: scale(0.3); opacity: 0; filter: brightness(3); }
+  25% { transform: scale(1.5); opacity: 1; filter: brightness(2.5); }
+  50% { transform: scale(1.1); filter: brightness(1.5); }
+  100% { transform: scale(1); opacity: 0; filter: brightness(1); }
+}
+.countdown-label {
+  font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.5);
+  letter-spacing: 3px; text-transform: uppercase; margin-top: 20px;
+}
+
+/* ── GAME OVER FLASH ── */
+.gameover-flash {
+  position: absolute; inset: 0; z-index: 50;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  background: rgba(0,0,0,0.8); backdrop-filter: blur(6px);
+  opacity: 0; pointer-events: none; transition: opacity 0.4s;
+}
+.gameover-flash.active { opacity: 1; }
+.gameover-text {
+  font-size: clamp(48px, 15vw, 90px); font-weight: 900;
+  letter-spacing: -3px; color: #FAC775;
+  text-shadow: 0 0 60px rgba(250,199,117,0.6);
+  animation: gameover-pop 0.6s ease-out;
+}
+@keyframes gameover-pop {
+  0% { transform: scale(0.5); opacity: 0; }
+  40% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.gameover-score {
+  font-size: 24px; font-weight: 700; color: rgba(255,255,255,0.7);
+  margin-top: 12px;
+}
+
 </style>
 </head>
 <body>
@@ -324,6 +401,11 @@ body {
     <div class="logo"><span class="six">6</span><span class="seven">7</span></div>
     <div class="tagline">67 COUNTER</div>
     <div class="subtitle">raise one hand up then drop it, then the other — alternating 6-7 style!</div>
+    <div class="duration-selector">
+      <button class="dur-btn" onclick="selectDuration(15)">15s</button>
+      <button class="dur-btn selected" onclick="selectDuration(30)">30s</button>
+      <button class="dur-btn" onclick="selectDuration(60)">60s</button>
+    </div>
     <button class="btn-primary" id="start-btn" onclick="startGame()">START</button>
     <div class="loading-status" id="status"></div>
     <div class="how-to">
@@ -338,6 +420,14 @@ body {
     <canvas id="canvas"></canvas>
     <canvas id="vfx-canvas"></canvas>
     <div class="fire-border" id="fire-border"></div>
+    <div class="countdown-overlay" id="countdown-overlay">
+      <div class="countdown-num" id="countdown-num">3</div>
+      <div class="countdown-label">get ready</div>
+    </div>
+    <div class="gameover-flash" id="gameover-flash">
+      <div class="gameover-text">GAME OVER</div>
+      <div class="gameover-score" id="gameover-score">0 reps</div>
+    </div>
     <div class="game-overlay">
       <div class="top-bar">
         <div class="timer" id="timer">0:30</div>
@@ -398,10 +488,20 @@ let ctx    = canvas.getContext('2d');
 let vfxCanvas = document.getElementById('vfx-canvas');
 let vfxCtx = vfxCanvas.getContext('2d');
 
+let selectedDuration = 30; // default
+
 let gameState = {
   active: false, count: 0, timeLeft: 30,
   startTime: 0, timer: null, stream: null,
+  duration: 30,
 };
+
+window.selectDuration = function(secs) {
+  selectedDuration = secs;
+  document.querySelectorAll('.dur-btn').forEach(b => {
+    b.classList.toggle('selected', b.textContent === secs + 's');
+  });
+}
 
 // ═══════════════════════════════════════
 //  STATE MACHINE — ALTERNATING HANDS
@@ -1255,6 +1355,92 @@ function stopChargeSFX() {
   }, 100);
 }
 
+// ── Countdown beep SFX ──
+function playCountdownBeep(isGo) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.5, t);
+  g.connect(masterGain);
+
+  if (isGo) {
+    // "GO!" — bright ascending chord
+    const freqs = [523, 659, 784, 1047]; // C5 E5 G5 C6
+    freqs.forEach((freq, i) => {
+      const osc = audioCtx.createOscillator();
+      osc.type = 'triangle';
+      const og = audioCtx.createGain();
+      og.gain.setValueAtTime(0.4, t);
+      og.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+      osc.frequency.value = freq;
+      osc.connect(og); og.connect(g);
+      osc.start(t + i * 0.03); osc.stop(t + 0.5);
+    });
+    g.gain.linearRampToValueAtTime(0, t + 0.5);
+    setTimeout(() => g.disconnect(), 600);
+  } else {
+    // 3, 2, 1 — short percussive blip
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, t);
+    osc.frequency.exponentialRampToValueAtTime(440, t + 0.12);
+    const og = audioCtx.createGain();
+    og.gain.setValueAtTime(0.6, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    osc.connect(og); og.connect(g);
+    osc.start(t); osc.stop(t + 0.18);
+    g.gain.linearRampToValueAtTime(0, t + 0.2);
+    setTimeout(() => g.disconnect(), 300);
+  }
+}
+
+// ── Victory / Finish SFX ──
+function playVictorySFX() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.45, t);
+  g.connect(masterGain);
+
+  // Descending fanfare: G5 → E5 → C5, then resolve up to C6
+  const notes = [
+    { f: 784, t: 0 },     // G5
+    { f: 659, t: 0.12 },  // E5
+    { f: 523, t: 0.24 },  // C5
+    { f: 1047, t: 0.5 },  // C6 (resolve)
+  ];
+  notes.forEach(n => {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'triangle';
+    const og = audioCtx.createGain();
+    const start = t + n.t;
+    osc.frequency.value = n.f;
+    og.gain.setValueAtTime(0.4, start);
+    og.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+    osc.connect(og); og.connect(g);
+    osc.start(start); osc.stop(start + 0.4);
+  });
+
+  // Shimmer wash
+  const shimLen = audioCtx.sampleRate * 0.5;
+  const shimBuf = audioCtx.createBuffer(1, shimLen, audioCtx.sampleRate);
+  const shimData = shimBuf.getChannelData(0);
+  for (let i = 0; i < shimLen; i++) shimData[i] = Math.random() * 2 - 1;
+  const shim = audioCtx.createBufferSource();
+  shim.buffer = shimBuf;
+  const hp = audioCtx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 8000;
+  const sg = audioCtx.createGain();
+  sg.gain.setValueAtTime(0.12, t + 0.4);
+  sg.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+  shim.connect(hp); hp.connect(sg); sg.connect(g);
+  shim.start(t + 0.4); shim.stop(t + 1.0);
+
+  g.gain.setValueAtTime(0.45, t + 0.8);
+  g.gain.linearRampToValueAtTime(0, t + 1.0);
+  setTimeout(() => g.disconnect(), 1200);
+}
+
 // ── Mute toggle ──
 window.toggleMute = function() {
   if (!audioCtx) return;
@@ -1440,27 +1626,47 @@ window.startGame = async function() {
   showScreen('game-screen');
   await startCamera();
 
-  gameState.active = true; gameState.count = 0; gameState.timeLeft = 30;
-  gameState.startTime = Date.now(); lastDetectTime = -1;
+  // Init audio (needed for countdown beeps)
+  initAudio(); resumeAudio();
+
+  // Reset game state but DON'T start tracking yet
+  gameState.active = false; gameState.count = 0;
+  gameState.duration = selectedDuration;
+  gameState.timeLeft = selectedDuration;
+  lastDetectTime = -1;
   resetSM(); resetStreak(); particles = []; auraPhase = 0;
 
-  initAudio(); resumeAudio(); startBGM();
-  bgmSpeedRate = 1.0; lastCountTime_audio = performance.now();
-
+  // Reset UI
   document.getElementById('count').textContent = '0';
   document.getElementById('count').className = 'count-display';
-  document.getElementById('timer').textContent = '0:30';
+  const tStr = selectedDuration >= 60
+    ? `1:${String(selectedDuration - 60).padStart(2, '0')}`
+    : `0:${String(selectedDuration).padStart(2, '0')}`;
+  document.getElementById('timer').textContent = tStr;
   document.getElementById('timer').classList.remove('warning');
   document.getElementById('count-label').textContent = '6 · 7';
   document.getElementById('count-label').style.color = '';
-  document.getElementById('prompt').textContent = 'raise one hand up';
+  document.getElementById('prompt').textContent = '';
   document.getElementById('prompt').className = 'prompt-box';
   document.getElementById('phase-timer').classList.remove('visible');
+  document.getElementById('gameover-flash').classList.remove('active');
+
+  // ── 3-2-1-GO! COUNTDOWN ──
+  await runCountdown();
+
+  // ── NOW START THE GAME ──
+  gameState.active = true;
+  gameState.startTime = Date.now();
+  bgmSpeedRate = 1.0; lastCountTime_audio = performance.now();
+  startBGM();
+  document.getElementById('prompt').textContent = 'raise one hand up';
 
   gameState.timer = setInterval(() => {
     gameState.timeLeft--;
+    const mins = Math.floor(gameState.timeLeft / 60);
+    const secs = gameState.timeLeft % 60;
     const t = document.getElementById('timer');
-    t.textContent = `0:${String(gameState.timeLeft).padStart(2, '0')}`;
+    t.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
     if (gameState.timeLeft <= 5) t.classList.add('warning');
     if (gameState.timeLeft <= 0) endGame();
   }, 1000);
@@ -1468,33 +1674,78 @@ window.startGame = async function() {
   requestAnimationFrame(detectLoop);
 }
 
+// ── Animated 3-2-1-GO! sequence ──
+function runCountdown() {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('countdown-overlay');
+    const numEl = document.getElementById('countdown-num');
+    overlay.classList.add('active');
+
+    const steps = ['3', '2', '1', 'GO!'];
+    let i = 0;
+
+    function showNext() {
+      if (i >= steps.length) {
+        overlay.classList.remove('active');
+        resolve();
+        return;
+      }
+      const step = steps[i];
+      numEl.textContent = step;
+      numEl.classList.remove('pulse', 'go');
+      void numEl.offsetWidth;
+      numEl.classList.add(step === 'GO!' ? 'go' : 'pulse');
+      playCountdownBeep(step === 'GO!');
+      i++;
+      setTimeout(showNext, step === 'GO!' ? 600 : 800);
+    }
+    showNext();
+  });
+}
+
 window.endGame = function() {
   if (!gameState.active) return;
   gameState.active = false;
   clearInterval(gameState.timer);
-  stopCamera();
   stopBGM(); stopChargeSFX();
 
   const count = gameState.count;
-  const bestKey = 'sixseven_best';
-  const prevBest = parseInt(localStorage.getItem(bestKey) || '0');
-  const isNewBest = count > prevBest;
-  if (isNewBest) localStorage.setItem(bestKey, count);
+  const dur = gameState.duration || 30;
 
-  document.getElementById('final-count').textContent = count;
-  document.getElementById('per-sec').textContent = (count / 30).toFixed(1);
-  document.getElementById('best-streak').textContent = streak.best;
-  document.getElementById('best').textContent = isNewBest ? count : prevBest;
-  document.getElementById('new-best').style.display = isNewBest ? 'inline-block' : 'none';
+  // Show GAME OVER flash
+  playVictorySFX();
+  document.getElementById('gameover-score').textContent = count + ' reps';
+  document.getElementById('gameover-flash').classList.add('active');
 
-  let rank = 'rookie';
-  if (count >= 50) rank = 'legend';
-  else if (count >= 35) rank = 'pro';
-  else if (count >= 20) rank = 'solid';
-  else if (count >= 10) rank = 'warming up';
-  document.getElementById('rank').textContent = rank;
+  // After 2s, transition to results screen
+  setTimeout(() => {
+    document.getElementById('gameover-flash').classList.remove('active');
+    stopCamera();
 
-  showScreen('results-screen');
+    const bestKey = 'sixseven_best';
+    const prevBest = parseInt(localStorage.getItem(bestKey) || '0');
+    const isNewBest = count > prevBest;
+    if (isNewBest) localStorage.setItem(bestKey, count);
+
+    document.getElementById('final-count').textContent = count;
+    document.getElementById('per-sec').textContent = (count / dur).toFixed(1);
+    document.getElementById('best-streak').textContent = streak.best;
+    document.getElementById('best').textContent = isNewBest ? count : prevBest;
+    document.getElementById('new-best').style.display = isNewBest ? 'inline-block' : 'none';
+
+    // Dynamic label based on duration
+    document.querySelector('.final-count-label').textContent = `6-7s in ${dur} seconds`;
+
+    let rank = 'rookie';
+    const rate = count / dur * 30; // normalize to 30s scale for ranks
+    if (rate >= 50) rank = 'legend';
+    else if (rate >= 35) rank = 'pro';
+    else if (rate >= 20) rank = 'solid';
+    else if (rate >= 10) rank = 'warming up';
+    document.getElementById('rank').textContent = rank;
+
+    showScreen('results-screen');
+  }, 2000);
 }
 
 window.showScreen = function(id) {
