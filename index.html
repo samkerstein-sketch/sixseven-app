@@ -570,6 +570,10 @@ const DROP_ZONE  = 0.40;
 // Velocity snap threshold (normalized Y units per frame, positive = downward)
 const SNAP_VELOCITY = 0.006;
 
+// ── EXCLUSIVITY: both-hand simultaneous rejection ──
+const SIMUL_WINDOW_MS = 200; // if both hands raise within 200ms → reject
+let bothUpCooldown = false;  // when true, both must return below drop line
+
 // Low-pass filter
 const WRIST_SMOOTH = 0.25;
 let smoothLWristY = null;
@@ -578,8 +582,8 @@ let prevSmoothLY = null;
 let prevSmoothRY = null;
 
 // Per-hand state: 'idle' → 'raised' → 'dropped'
-let leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
-let rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
+let leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
+let rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
 
 // Sequence state
 let sm = {
@@ -593,14 +597,15 @@ let sm = {
 };
 
 function resetSM() {
-  leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
-  rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
+  leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
+  rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
   sm = {
     phase: 'A', completedHand: null, phaseBStart: 0,
     lastCountTime: 0, lostFrames: 0, _armLineY: 0, _fireLineY: 0,
   };
   smoothLWristY = null; smoothRWristY = null;
   prevSmoothLY = null; prevSmoothRY = null;
+  bothUpCooldown = false;
   updateHandBadges();
   updatePrimedGlow(null);
   document.getElementById('phase-timer').classList.remove('visible');
@@ -613,17 +618,23 @@ function lowPass(prev, raw, alpha) {
 
 /**
  * Process a single hand's raise→drop cycle.
- * Uses position + velocity for snap detection.
- * @param velocity - positive = moving downward
+ * @param otherHandAbove - true if the OTHER hand is currently above raise line
+ * @param otherHand - the other hand's state object (for exclusivity check)
  */
-function processHand(hand, smoothY, velocity, raiseThreshold, dropThreshold) {
+function processHand(hand, smoothY, velocity, raiseThreshold, dropThreshold, otherHandAbove, now) {
   switch (hand.state) {
     case 'idle':
-      // Hand must be above the raise line (inside the action zone top)
       if (smoothY < raiseThreshold) {
+        // EXCLUSIVITY CHECK: only allow raise if the other hand is NOT also above the raise line
+        if (otherHandAbove) {
+          // Both hands up simultaneously → block
+          hand.raisedFrames = 0;
+          return false;
+        }
         hand.raisedFrames++;
         if (hand.raisedFrames >= ARM_CONFIRM) {
           hand.state = 'raised';
+          hand.raisedAt = now;
           hand.dropFrames = 0;
         }
       } else {
@@ -632,13 +643,9 @@ function processHand(hand, smoothY, velocity, raiseThreshold, dropThreshold) {
       return false;
 
     case 'raised':
-      // Still above raise line? Stay raised
       if (smoothY < raiseThreshold) { hand.dropFrames = 0; return false; }
 
-      // Two ways to detect the drop:
-      // 1. Position-based: wrist crossed below the drop line
       const positionDrop = smoothY > dropThreshold;
-      // 2. Velocity-based: fast downward snap while between raise & drop lines
       const velocitySnap = velocity > SNAP_VELOCITY;
 
       if (positionDrop || velocitySnap) {
@@ -659,7 +666,7 @@ function processHand(hand, smoothY, velocity, raiseThreshold, dropThreshold) {
 }
 
 /**
- * Core alternating-hand 6-7 detection with Action Zone.
+ * Core alternating-hand 6-7 detection with Action Zone + Exclusivity.
  */
 function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
   const shoulderY = (lShoulder.y + rShoulder.y) / 2;
@@ -667,10 +674,8 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
   const bodyUnit  = shoulderY - noseY;
   if (bodyUnit < 0.01) return false;
 
-  // ── ACTION ZONE lines (body-proportional) ──
-  // Raise line: chin/mouth area
+  // ── ACTION ZONE lines ──
   const raiseThreshold = noseY + bodyUnit * RAISE_ZONE;
-  // Drop line: mid-chest, below shoulders
   const dropThreshold  = shoulderY + bodyUnit * DROP_ZONE;
 
   // ── Smooth wrist Y + velocity ──
@@ -682,18 +687,52 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
   const velL = prevSmoothLY !== null ? smoothLWristY - prevSmoothLY : 0;
   const velR = prevSmoothRY !== null ? smoothRWristY - prevSmoothRY : 0;
 
-  // Store for drawing
   sm._armLineY  = raiseThreshold;
   sm._fireLineY = dropThreshold;
 
   const now = performance.now();
 
-  // Phase B timeout
+  // ── RAW position checks (before hand processing) ──
+  const leftAboveRaise  = smoothLWristY < raiseThreshold;
+  const rightAboveRaise = smoothRWristY < raiseThreshold;
+  const leftBelowDrop   = smoothLWristY > dropThreshold;
+  const rightBelowDrop  = smoothRWristY > dropThreshold;
+
+  // ── BOTH-HANDS-UP COOLDOWN ──
+  // If both hands are above raise line simultaneously, enter cooldown.
+  // Both must return below drop line before any new attempt.
+  if (leftAboveRaise && rightAboveRaise) {
+    if (!bothUpCooldown) {
+      // Just detected both hands up — invalidate any in-progress state
+      bothUpCooldown = true;
+      leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
+      rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
+      if (sm.phase === 'A') {
+        setPrompt('idle');
+      }
+      // Don't reset phase B if already in it — let timeout handle that
+    }
+    updateHandBadges();
+    return false;
+  }
+
+  // Exit cooldown only when BOTH hands are below the drop line
+  if (bothUpCooldown) {
+    if (leftBelowDrop && rightBelowDrop) {
+      bothUpCooldown = false;
+    } else {
+      // Still in cooldown — don't process anything
+      updateHandBadges();
+      return false;
+    }
+  }
+
+  // ── Phase B timeout ──
   if (sm.phase === 'B' && (now - sm.phaseBStart) > PHASE_B_TIMEOUT) {
     sm.phase = 'A';
     sm.completedHand = null;
-    leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
-    rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
+    leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
+    rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
     setPrompt('idle');
     updateHandBadges();
     updatePrimedGlow(null);
@@ -701,11 +740,36 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
     return false;
   }
 
-  // Process each hand with velocity
-  const leftDone  = processHand(leftHand,  smoothLWristY, velL, raiseThreshold, dropThreshold);
-  const rightDone = processHand(rightHand, smoothRWristY, velR, raiseThreshold, dropThreshold);
+  // ── Process each hand (pass whether OTHER hand is above raise line) ──
+  const leftDone  = processHand(leftHand,  smoothLWristY, velL, raiseThreshold, dropThreshold, rightAboveRaise, now);
+  const rightDone = processHand(rightHand, smoothRWristY, velR, raiseThreshold, dropThreshold, leftAboveRaise, now);
 
-  // Phase A: waiting for first hand
+  // ── SIMULTANEOUS COMPLETION CHECK ──
+  // If both hands completed their raise→drop within 200ms of each other, reject both
+  if (leftDone && rightDone) {
+    leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
+    rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
+    bothUpCooldown = true; // force both down before retry
+    updateHandBadges();
+    return false;
+  }
+
+  // If one hand just completed but the other also raised within SIMUL_WINDOW_MS, reject
+  if (leftDone || rightDone) {
+    const doneHand = leftDone ? leftHand : rightHand;
+    const otherHand = leftDone ? rightHand : leftHand;
+    if (otherHand.state === 'raised' && otherHand.raisedAt > 0 &&
+        (now - otherHand.raisedAt) < SIMUL_WINDOW_MS) {
+      // Both raised nearly simultaneously — reject
+      leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
+      rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
+      bothUpCooldown = true;
+      updateHandBadges();
+      return false;
+    }
+  }
+
+  // ── Phase A: waiting for first hand ──
   if (sm.phase === 'A') {
     if (leftDone || rightDone) {
       const which = leftDone ? 'left' : 'right';
@@ -716,6 +780,7 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
       opposite.state = 'idle';
       opposite.raisedFrames = 0;
       opposite.dropFrames = 0;
+      opposite.raisedAt = 0;
       setPrompt('half', which);
       triggerHalfwayVFX(which);
       updateHandBadges();
@@ -730,7 +795,7 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
     return false;
   }
 
-  // Phase B: waiting for opposite hand
+  // ── Phase B: waiting for opposite hand ──
   if (sm.phase === 'B') {
     const neededHand = sm.completedHand === 'left' ? 'right' : 'left';
     const neededDone = neededHand === 'left' ? leftDone : rightDone;
@@ -742,8 +807,8 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
       sm.lastCountTime = now;
       sm.phase = 'A';
       sm.completedHand = null;
-      leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
-      rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0 };
+      leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
+      rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
       updateHandBadges();
       updatePrimedGlow(null);
       document.getElementById('phase-timer').classList.remove('visible');
