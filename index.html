@@ -79,10 +79,12 @@ body {
 }
 .top-bar { display: flex; justify-content: space-between; align-items: center; }
 .timer {
+  position: absolute; left: 50%; transform: translateX(-50%);
   background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
   padding: 10px 20px; border-radius: 30px; font-size: 20px;
   font-weight: 800; color: #FAC775; border: 2px solid rgba(250,199,117,0.4);
-  pointer-events: auto; transition: all 0.3s;
+  pointer-events: auto; transition: color 0.3s, border-color 0.3s;
+  z-index: 15;
 }
 .timer.warning { color: #F0997B; border-color: rgba(240,153,123,0.6); animation: pulse-warn 0.5s ease-in-out infinite; }
 @keyframes pulse-warn { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
@@ -463,9 +465,10 @@ body {
       <div class="gameover-text">GAME OVER</div>
       <div class="gameover-score" id="gameover-score">0 reps</div>
     </div>
+    <div class="timer" id="timer">0:30</div>
     <div class="game-overlay">
       <div class="top-bar">
-        <div class="timer" id="timer">0:30</div>
+        <div></div>
         <div class="top-right-btns">
           <button class="mute-btn" id="mute-btn" onclick="toggleMute()">🔊</button>
           <button class="close-btn" onclick="endGame()">×</button>
@@ -1957,6 +1960,12 @@ function drawPose(pose, nose, lSh, rSh, lWr, rWr) {
   ctx.font = 'bold 11px -apple-system, sans-serif';
   ctx.fillStyle = 'rgba(100,180,255,0.7)'; ctx.fillText('▲ RAISE', 6, raiseLineY - 6);
   ctx.fillStyle = 'rgba(100,180,255,0.7)'; ctx.fillText('▼ DROP', 6, dropLineY + 14);
+
+  // Position the game timer at the vertical midpoint of the action zone
+  const zoneMidY = (raiseLineY + dropLineY) / 2;
+  // Convert canvas Y to screen Y (canvas may be scaled vs viewport)
+  const screenMidY = zoneMidY * (window.innerHeight / canvas.height);
+  document.getElementById('timer').style.top = screenMidY + 'px';
 
   // Arm skeleton lines
   ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 2;
