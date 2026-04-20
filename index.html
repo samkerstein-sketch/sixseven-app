@@ -79,7 +79,7 @@ body {
 }
 .top-bar { display: flex; justify-content: space-between; align-items: center; }
 .timer {
-  position: fixed; top: 20px; left: 20px;
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
   background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
   padding: 10px 20px; border-radius: 30px; font-size: 20px;
   font-weight: 800; color: #FAC775; border: 2px solid rgba(250,199,117,0.4);
@@ -87,7 +87,7 @@ body {
   z-index: 15;
 }
 .timer.warning { color: #F0997B; border-color: rgba(240,153,123,0.6); animation: pulse-warn 0.5s ease-in-out infinite; }
-@keyframes pulse-warn { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+@keyframes pulse-warn { 0%, 100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.05); } }
 
 .close-btn, .mute-btn {
   width: 44px; height: 44px; border-radius: 50%;
@@ -99,22 +99,16 @@ body {
 .mute-btn { font-size: 18px; }
 .mute-btn.muted { color: rgba(255,255,255,0.3); }
 .top-right-btns { display: flex; gap: 8px; }
-/* ── COUNTER CONTAINER (floats in Action Zone) ── */
-.count-container {
-  position: fixed; left: 50%; transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center;
-  background: rgba(0,0,0,0.3); backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 24px; padding: 8px 28px 6px;
-  pointer-events: none; z-index: 15;
-  transition: opacity 0.3s;
+.center-display {
+  flex: 1; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; pointer-events: none;
 }
 
 /* ── COUNTER VFX ── */
 .count-display {
-  font-size: clamp(48px, 15vw, 80px); font-weight: 900;
-  letter-spacing: -4px; line-height: 1;
-  text-shadow: 0 0 60px rgba(175,169,236,0.8), 0 0 120px rgba(250,199,117,0.4);
+  font-size: clamp(120px, 40vw, 260px); font-weight: 900;
+  letter-spacing: -10px; line-height: 1;
+  text-shadow: 0 0 80px rgba(175,169,236,0.8), 0 0 160px rgba(250,199,117,0.4);
   transition: transform 0.1s, filter 0.1s;
 }
 .count-display.pop {
@@ -144,8 +138,8 @@ body {
 }
 
 .count-label {
-  font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.5);
-  letter-spacing: 3px; text-transform: uppercase; margin-top: 4px;
+  font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.6);
+  letter-spacing: 4px; text-transform: uppercase; margin-top: 10px;
   transition: all 0.3s;
 }
 
@@ -472,10 +466,6 @@ body {
       <div class="gameover-score" id="gameover-score">0 reps</div>
     </div>
     <div class="timer" id="timer">0:30</div>
-    <div class="count-container" id="count-container">
-      <div class="count-display" id="count">0</div>
-      <div class="count-label" id="count-label">6 · 7</div>
-    </div>
     <div class="game-overlay">
       <div class="top-bar">
         <div></div>
@@ -491,6 +481,10 @@ body {
       </div>
       <div class="phase-timer" id="phase-timer">2.0s</div>
       <div class="streak-badge" id="streak-badge">STREAK</div>
+      <div class="center-display">
+        <div class="count-display" id="count">0</div>
+        <div class="count-label" id="count-label">6 · 7</div>
+      </div>
       <div class="bottom-prompt">
         <div class="prompt-box" id="prompt">raise your hands up</div>
       </div>
@@ -691,17 +685,6 @@ function processPose(nose, lShoulder, rShoulder, lWrist, rWrist, lEye, rEye) {
   sm._fireLineY = dropThreshold;
 
   const now = performance.now();
-
-  // ── ANTI-CHEAT: both hands above raise line simultaneously → reject ──
-  const leftAboveRaise  = smoothLWristY < raiseThreshold;
-  const rightAboveRaise = smoothRWristY < raiseThreshold;
-  if (leftAboveRaise && rightAboveRaise) {
-    leftHand  = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
-    rightHand = { state: 'idle', raisedFrames: 0, dropFrames: 0, raisedAt: 0 };
-    if (sm.phase === 'A') setPrompt('idle');
-    updateHandBadges();
-    return false;
-  }
 
   // ── Phase B timeout ──
   if (sm.phase === 'B' && (now - sm.phaseBStart) > PHASE_B_TIMEOUT) {
@@ -1696,7 +1679,6 @@ function stopCamera() {
 }
 
 let lastDetectTime = -1;
-let smoothCounterY = null; // smoothed Y position for counter container
 
 window.startGame = async function() {
   if (!poseLandmarker) { await loadModel(); if (!poseLandmarker) return; }
@@ -1710,7 +1692,7 @@ window.startGame = async function() {
   gameState.active = false; gameState.count = 0;
   gameState.duration = selectedDuration;
   gameState.timeLeft = selectedDuration;
-  lastDetectTime = -1; smoothCounterY = null;
+  lastDetectTime = -1;
   resetSM(); resetStreak(); particles = []; auraPhase = 0;
 
   // Reset UI
@@ -1912,14 +1894,6 @@ function drawPose(pose, nose, lSh, rSh, lWr, rWr) {
   ctx.font = 'bold 11px -apple-system, sans-serif';
   ctx.fillStyle = 'rgba(100,180,255,0.7)'; ctx.fillText('▲ RAISE', 6, raiseLineY - 6);
   ctx.fillStyle = 'rgba(100,180,255,0.7)'; ctx.fillText('▼ DROP', 6, dropLineY + 14);
-
-  // Position counter container centered in Action Zone
-  const zoneMidY = (raiseLineY + dropLineY) / 2;
-  const screenMidY = zoneMidY * (window.innerHeight / canvas.height);
-  smoothCounterY = smoothCounterY === null ? screenMidY : lowPass(smoothCounterY, screenMidY, 0.85);
-  const container = document.getElementById('count-container');
-  container.style.top = smoothCounterY + 'px';
-  container.style.transform = 'translateX(-50%) translateY(-50%)';
 
   // Arm skeleton lines
   ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 2;
